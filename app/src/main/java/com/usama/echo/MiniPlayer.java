@@ -72,6 +72,14 @@ final class MiniPlayer implements Player.Listener {
         row.addView(playBtn);
         ImageButton next = Ui.icon(a, R.drawable.ic_next, 44, Ui.TEXT);
         row.addView(next);
+        ImageButton close = Ui.icon(a, R.drawable.ic_close, 40, Ui.SUB);
+        close.setOnClickListener(v -> {
+            if (controller == null) return;
+            controller.stop();
+            controller.clearMediaItems(); // closes the player and its notification
+            view.setVisibility(View.GONE);
+        });
+        row.addView(close);
         view.addView(row);
         view.setVisibility(View.GONE);
 
