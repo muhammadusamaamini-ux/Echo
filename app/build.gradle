@@ -1,0 +1,49 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.usama.naghma'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.usama.naghma'
+        minSdk 24
+        targetSdk 34
+        def buildNumber = (project.findProperty('buildNumber') ?: '1').toString().toInteger()
+        versionCode buildNumber
+        versionName "build " + buildNumber
+    }
+
+    // Fixed signing key, so every new build installs over the old one and keeps your music.
+    signingConfigs {
+        debug {
+            storeFile file('naghma.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.media3:media3-exoplayer:1.4.1'
+    implementation 'androidx.media3:media3-session:1.4.1'
+}
