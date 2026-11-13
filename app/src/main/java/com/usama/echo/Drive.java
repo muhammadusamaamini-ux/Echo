@@ -36,7 +36,7 @@ final class Drive {
     private static final Pattern HREF = Pattern.compile("href=\"([^\"]+)\"");
     private static final Pattern TITLE = Pattern.compile("class=\"flip-entry-title\">(.*?)</div>", Pattern.DOTALL);
     private static final Pattern PAGE_TITLE = Pattern.compile("<title>(.*?)</title>", Pattern.DOTALL);
-    private static final Set<String> AUDIO = new HashSet<>(java.util.Arrays.asList(
+    static final Set<String> AUDIO = new HashSet<>(java.util.Arrays.asList(
             "mp3", "m4a", "aac", "wav", "flac", "ogg", "oga", "opus", "wma", "amr", "3gp", "mka", "weba"));
 
     static String folderId(String text) {
@@ -62,6 +62,8 @@ final class Drive {
         int songCount;
         boolean complete = true; // false if a sub-folder couldn't be read (then nothing is removed)
         String error;
+        String account;          // set for private folders read through Google sign-in
+        DriveAuth.NeedsSignIn needsSignIn;
     }
 
     // ---------- reading a shared folder ----------
@@ -126,10 +128,14 @@ final class Drive {
     }
 
     private static Library.Song song(String fileId, String fileName, String folderName) {
+        return song(fileId, fileName, folderName, null);
+    }
+
+    static Library.Song song(String fileId, String fileName, String folderName, String account) {
         Library.Song s = new Library.Song();
         s.id = "gd_" + fileId;
         s.source = "drive";
-        s.uri = streamUrl(fileId);
+        s.uri = account == null ? streamUrl(fileId) : DriveApi.streamUri(fileId, account);
         s.added = System.currentTimeMillis();
         String base = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
         base = base.replaceAll("^\\d{1,3}[ ._-]+", "").replace('_', ' ').trim(); // "01 - Song" -> "Song"
@@ -214,19 +220,27 @@ final class Drive {
 
     /** Reads the folder and makes (or refreshes) its playlist. */
     static void load(Activity a, String folderId, Library.Playlist existing) {
+        load(a, folderId, existing, existing == null ? null : existing.driveAccount);
+    }
+
+    static void load(Activity a, String folderId, Library.Playlist existing, String account) {
         final Handler main = new Handler(Looper.getMainLooper());
         final TextView msg = Ui.text(a, "Reading the folder…", 15, Ui.TEXT, false);
         msg.setPadding(Ui.dp(a, 24), Ui.dp(a, 20), Ui.dp(a, 24), Ui.dp(a, 8));
         final AlertDialog wait = new AlertDialog.Builder(a).setTitle("Google Drive").setView(msg)
                 .setCancelable(false).show();
         new Thread(() -> {
-            final Folder f = read(folderId);
+            final Folder f = account == null ? read(folderId) : DriveApi.readTree(a, account, folderId, null);
             main.post(() -> {
                 wait.dismiss();
                 if (a.isFinishing()) return;
+                if (f.needsSignIn != null) {
+                    SignInActivity.run(a, account, () -> load(a, folderId, existing, account));
+                    return;
+                }
                 if (f.error != null) {
-                    new AlertDialog.Builder(a).setTitle("Couldn't add the folder").setMessage(f.error)
-                            .setPositiveButton("OK", null).show();
+                    new AlertDialog.Builder(a).setTitle(existing == null ? "Couldn't add the folder" : "Couldn't sync")
+                            .setMessage(f.error).setPositiveButton("OK", null).show();
                     return;
                 }
                 Library lib = Library.get(a);
@@ -299,6 +313,9 @@ final class Drive {
         r.newFolders = lib.playlists.size() - foldersBefore;
         r.newSongs = lib.songs.size() - songsBefore;
 
+        for (Library.Playlist p : lib.playlists) {
+            if (rootId.equals(p.driveRoot)) p.driveAccount = f.account;
+        }
         if (f.complete) {
             // Songs deleted from Drive
             List<Library.Song> gone = new ArrayList<>();
@@ -377,18 +394,20 @@ final class Drive {
     private static boolean syncing;
 
     /** The Drive folders you imported (each is synced with all its sub-folders). */
-    private static List<String> roots(Library lib) {
-        Set<String> out = new java.util.LinkedHashSet<>();
+    private static List<String[]> roots(Library lib) {
+        java.util.Map<String, String> out = new java.util.LinkedHashMap<>(); // root -> account (or null)
         for (Library.Playlist p : lib.playlists) {
             if (p.driveFolder == null) continue;
             if (p.driveRoot != null) {
-                out.add(p.driveRoot);
+                if (!out.containsKey(p.driveRoot) || p.driveAccount != null) out.put(p.driveRoot, p.driveAccount);
             } else {
                 Library.Playlist parent = lib.playlist(p.parentId);
-                if (parent == null || parent.driveFolder == null) out.add(p.driveFolder);
+                if (parent == null || parent.driveFolder == null) out.put(p.driveFolder, p.driveAccount);
             }
         }
-        return new ArrayList<>(out);
+        List<String[]> list = new ArrayList<>();
+        for (java.util.Map.Entry<String, String> e : out.entrySet()) list.add(new String[]{e.getKey(), e.getValue()});
+        return list;
     }
 
     /** Checks every imported Drive folder for changes. Safe to call from any thread. */
@@ -400,7 +419,7 @@ final class Drive {
                 if (done != null) done.onDone(new Result());
                 return;
             }
-            final List<String> roots = roots(Library.get(app));
+            final List<String[]> roots = roots(Library.get(app));
             if (roots.isEmpty()) {
                 if (done != null) done.onDone(new Result());
                 return;
@@ -408,15 +427,17 @@ final class Drive {
             syncing = true;
             new Thread(() -> {
                 final List<Folder> results = new ArrayList<>();
-                for (String id : roots) results.add(read(id));
+                for (String[] r : roots) {
+                    results.add(r[1] == null ? read(r[0]) : DriveApi.readTree(app, r[1], r[0], null));
+                }
                 main.post(() -> {
                     Result total = new Result();
                     Library lib = Library.get(app);
                     for (int i = 0; i < roots.size(); i++) {
                         Folder f = results.get(i);
                         if (f.error != null || f.root == null) continue; // offline or unshared: change nothing
-                        if (lib.playlistForDrive(roots.get(i)) == null) continue; // you deleted it meanwhile
-                        total.add(apply(lib, f, roots.get(i), null));
+                        if (lib.playlistForDrive(roots.get(i)[0]) == null) continue; // you deleted it meanwhile
+                        total.add(apply(lib, f, roots.get(i)[0], null));
                     }
                     syncing = false;
                     app.getSharedPreferences("drive", android.content.Context.MODE_PRIVATE).edit()
@@ -432,7 +453,8 @@ final class Drive {
         Library lib = Library.get(a);
         String root = p.driveRoot != null ? p.driveRoot : p.driveFolder;
         Library.Playlist rootPl = lib.playlistForDrive(root);
-        load(a, root, rootPl != null ? rootPl : p);
+        Library.Playlist target = rootPl != null ? rootPl : p;
+        load(a, root, target, target.driveAccount != null ? target.driveAccount : p.driveAccount);
     }
 
     static long lastSync(android.content.Context c) {

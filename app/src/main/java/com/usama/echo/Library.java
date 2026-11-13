@@ -46,6 +46,7 @@ final class Library {
         String parentId;    // the folder this one is inside; null = top level
         String driveRoot;   // the Drive folder that was imported (kept in sync)
         String driveName;   // the folder's name in Drive at the last sync
+        String driveAccount; // Google account for private folders (null = shared link)
         final List<String> songIds = new ArrayList<>();
         final List<YtItem> ytItems = new ArrayList<>();
 
@@ -340,6 +341,7 @@ final class Library {
                 p.parentId = o.optString("parent", null);
                 p.driveRoot = o.optString("driveRoot", null);
                 p.driveName = o.optString("driveName", null);
+                p.driveAccount = o.optString("driveAccount", null);
                 JSONArray ids = o.optJSONArray("songs");
                 if (ids != null) for (int j = 0; j < ids.length(); j++) p.songIds.add(ids.getString(j));
                 JSONArray yt = o.optJSONArray("yt");
@@ -386,6 +388,7 @@ final class Library {
                 if (p.parentId != null) o.put("parent", p.parentId);
                 if (p.driveRoot != null) o.put("driveRoot", p.driveRoot);
                 if (p.driveName != null) o.put("driveName", p.driveName);
+                if (p.driveAccount != null) o.put("driveAccount", p.driveAccount);
                 JSONArray ids = new JSONArray();
                 for (String id : p.songIds) ids.put(id);
                 o.put("songs", ids);

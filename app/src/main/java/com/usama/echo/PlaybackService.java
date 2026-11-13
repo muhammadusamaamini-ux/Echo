@@ -7,15 +7,24 @@ import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.Player;
+import androidx.media3.datasource.DataSource;
+import androidx.media3.datasource.DataSpec;
+import androidx.media3.datasource.DefaultDataSource;
+import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.datasource.ResolvingDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
 
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Plays the music in the background, with the notification and lock-screen controls. */
 public class PlaybackService extends MediaSessionService {
@@ -24,7 +33,15 @@ public class PlaybackService extends MediaSessionService {
     @Override
     public void onCreate() {
         super.onCreate();
+        // Private Google Drive songs ("gdrive://") are played with your sign-in token.
+        DataSource.Factory http = new DefaultHttpDataSource.Factory()
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(20000)
+                .setReadTimeoutMs(20000);
+        DataSource.Factory base = new DefaultDataSource.Factory(this, http);
+        DataSource.Factory sources = new ResolvingDataSource.Factory(base, this::resolve);
         ExoPlayer player = new ExoPlayer.Builder(this)
+                .setMediaSourceFactory(new DefaultMediaSourceFactory(sources))
                 .setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(C.USAGE_MEDIA)
                         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -40,6 +57,25 @@ public class PlaybackService extends MediaSessionService {
                 .setSessionActivity(pi)
                 .setCallback(new Callback())
                 .build();
+    }
+
+    private DataSpec resolve(DataSpec spec) throws IOException {
+        android.net.Uri u = spec.uri;
+        if (!"gdrive".equals(u.getScheme())) return spec;
+        String fileId = u.getLastPathSegment();
+        String account = u.getQueryParameter("a");
+        String token;
+        try {
+            token = DriveAuth.token(getApplicationContext(), account);
+        } catch (Exception e) {
+            throw new IOException("Open Echo and sign in to Google again", e);
+        }
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Bearer " + token);
+        return spec.buildUpon()
+                .setUri(android.net.Uri.parse(DriveApi.mediaUrl(fileId)))
+                .build()
+                .withAdditionalHeaders(headers);
     }
 
     @Override

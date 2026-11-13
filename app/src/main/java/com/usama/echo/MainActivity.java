@@ -32,7 +32,7 @@ import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
-    private static final int REQ_FILES = 1, REQ_PERM = 2, REQ_WEB = 3, REQ_NOTIFY = 4;
+    private static final int REQ_FILES = 1, REQ_PERM = 2, REQ_WEB = 3, REQ_NOTIFY = 4, REQ_ACCOUNT = 5;
 
     private final TextView[] tabs = new TextView[3];
     private final View[] pages = new View[3];
@@ -477,18 +477,34 @@ public class MainActivity extends Activity {
 
     private void showImport() {
         String[] options = {
-                "Google Drive folder (plays online)",
+                "Google Drive (sign in, private folders)",
+                "Google Drive shared link",
                 "YouTube playlist",
                 "All music on this phone",
                 "Pick files on this phone"
         };
         new AlertDialog.Builder(this).setTitle("Import music")
                 .setItems(options, (d, which) -> {
-                    if (which == 0) Drive.askLink(this, null);
-                    else if (which == 1) YouTube.askLink(this, null);
-                    else if (which == 2) importDevice();
+                    if (which == 0) chooseAccount();
+                    else if (which == 1) Drive.askLink(this, null);
+                    else if (which == 2) YouTube.askLink(this, null);
+                    else if (which == 3) importDevice();
                     else pickFiles();
                 }).show();
+    }
+
+    /** Shows the Google accounts on this phone; then you browse that account's Drive. */
+    private void chooseAccount() {
+        try {
+            Intent i = com.google.android.gms.common.AccountPicker.newChooseAccountIntent(
+                    new com.google.android.gms.common.AccountPicker.AccountChooserOptions.Builder()
+                            .setAllowableAccountsTypes(java.util.Collections.singletonList("com.google"))
+                            .setAlwaysShowAccountPicker(true)
+                            .build());
+            startActivityForResult(i, REQ_ACCOUNT);
+        } catch (Exception e) {
+            toast("Couldn't show your Google accounts");
+        }
     }
 
     private void pickFiles() {
@@ -567,6 +583,11 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
         if (res != RESULT_OK || data == null) return;
+        if (req == REQ_ACCOUNT) {
+            String account = data.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME);
+            if (account != null) startActivity(new Intent(this, DriveBrowserActivity.class).putExtra("account", account));
+            return;
+        }
         if (req == REQ_FILES) {
             List<Uri> uris = new ArrayList<>();
             if (data.getClipData() != null) {

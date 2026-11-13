@@ -51,6 +51,11 @@
 
         <activity android:name=".PlaylistActivity" android:exported="false" />
         <activity android:name=".NowPlayingActivity" android:exported="false" />
+        <activity android:name=".DriveBrowserActivity" android:exported="false" />
+        <activity
+            android:name=".SignInActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <activity
             android:name=".YouTubeActivity"
             android:exported="false"
