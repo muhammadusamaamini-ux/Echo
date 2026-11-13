@@ -32,7 +32,7 @@ import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
-    private static final int REQ_FILES = 1, REQ_PERM = 2, REQ_WEB = 3;
+    private static final int REQ_FILES = 1, REQ_PERM = 2, REQ_WEB = 3, REQ_NOTIFY = 4;
 
     private final TextView[] tabs = new TextView[3];
     private final View[] pages = new View[3];
@@ -59,6 +59,9 @@ public class MainActivity extends Activity {
         TextView imp = Ui.pill(this, "+ Import", true);
         imp.setOnClickListener(v -> showImport());
         head.addView(imp);
+        ImageButton menu = Ui.icon(this, R.drawable.ic_more, 44, Ui.TEXT);
+        menu.setOnClickListener(this::mainMenu);
+        head.addView(menu);
         root.addView(head);
 
         // Tabs
@@ -97,6 +100,51 @@ public class MainActivity extends Activity {
         showTab(0);
         refresh();
         handleShare(getIntent());
+        setupUpdates(getIntent());
+    }
+
+    // ---------- updates ----------
+
+    private void setupUpdates(Intent intent) {
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                && !getSharedPreferences("updates", MODE_PRIVATE).getBoolean("askedNotify", false)) {
+            getSharedPreferences("updates", MODE_PRIVATE).edit().putBoolean("askedNotify", true).apply();
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
+        }
+        Updater.schedule(this);
+        if (intent != null && intent.getBooleanExtra("update", false)) {
+            intent.removeExtra("update");
+            Updater.check(this);
+        } else {
+            // Quiet check each time Echo opens; shows the notification if a new build is out.
+            final android.content.Context app = getApplicationContext();
+            new Thread(() -> {
+                try {
+                    Updater.checkAndNotify(app);
+                } catch (Exception ignored) {
+                }
+            }).start();
+        }
+    }
+
+    private void mainMenu(View anchor) {
+        PopupMenu m = new PopupMenu(this, anchor);
+        m.getMenu().add(0, 1, 0, "Check for updates");
+        m.getMenu().add(0, 2, 1, "About (build " + Updater.installedBuild(this) + ")");
+        m.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == 1) {
+                Updater.check(this);
+            } else {
+                new AlertDialog.Builder(this).setTitle("Echo")
+                        .setMessage("Build " + Updater.installedBuild(this) + "\n\nYour personal music player. "
+                                + "Echo checks for updates every few hours and tells you with a notification.")
+                        .setPositiveButton("Check for updates", (d, w) -> Updater.check(this))
+                        .setNegativeButton("Close", null).show();
+            }
+            return true;
+        });
+        m.show();
     }
 
     // ---------- pages ----------
@@ -510,6 +558,10 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         handleShare(intent);
+        if (intent.getBooleanExtra("update", false)) {
+            intent.removeExtra("update");
+            Updater.check(this);
+        }
     }
 
     /** Something was shared to Echo: a YouTube link or audio files. */
