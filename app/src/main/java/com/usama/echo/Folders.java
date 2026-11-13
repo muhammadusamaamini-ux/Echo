@@ -35,7 +35,7 @@ final class Folders {
         Library lib = Library.get(a);
         LinearLayout row = Ui.row(a);
         row.setPadding(Ui.dp(a, 16), Ui.dp(a, 8), Ui.dp(a, 4), Ui.dp(a, 8));
-        int sub = lib.children(p.id).size();
+        int sub = lib.visibleChildren(p.id).size();
         if (p.youtube) {
             row.addView(Ui.tile(a, "▶", 52, Ui.YT));
         } else {
@@ -79,6 +79,33 @@ final class Folders {
         a.startActivity(new Intent(a, p.youtube ? YouTubeActivity.class : PlaylistActivity.class).putExtra("id", p.id));
     }
 
+    /** ⋮ → Hidden folders: open or unhide them. */
+    static void showHidden(Activity a, Runnable changed) {
+        Library lib = Library.get(a);
+        List<Library.Playlist> hidden = lib.hiddenFolders();
+        if (hidden.isEmpty()) {
+            new AlertDialog.Builder(a).setTitle("Hidden folders")
+                    .setMessage("Nothing is hidden. To hide a folder or playlist, tap its ⋮ and choose Hide.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        String[] names = new String[hidden.size()];
+        for (int i = 0; i < hidden.size(); i++) names[i] = lib.path(hidden.get(i));
+        new AlertDialog.Builder(a).setTitle("Hidden folders")
+                .setItems(names, (d, which) -> {
+                    Library.Playlist p = hidden.get(which);
+                    new AlertDialog.Builder(a).setTitle(p.name)
+                            .setPositiveButton("Open", (d2, w2) -> open(a, p))
+                            .setNeutralButton("Unhide", (d2, w2) -> {
+                                p.hidden = false;
+                                lib.save();
+                                changed.run();
+                            })
+                            .setNegativeButton("Cancel", null).show();
+                })
+                .setNegativeButton("Close", null).show();
+    }
+
     // ---------- menu ----------
 
     static void menu(Activity a, View anchor, Library.Playlist p, Runnable changed) {
@@ -92,7 +119,8 @@ final class Folders {
         if (!p.youtube) m.getMenu().add(0, 7, 3, "New folder inside");
         m.getMenu().add(0, 3, 4, "Rename");
         m.getMenu().add(0, 4, 5, "Move to…");
-        m.getMenu().add(0, 5, 6, "Delete");
+        m.getMenu().add(0, 8, 6, p.hidden ? "Unhide" : "Hide");
+        m.getMenu().add(0, 5, 7, "Delete");
         m.setOnMenuItemClickListener(item -> {
             switch (item.getItemId()) {
                 case 1: Hub.play(a, lib.allSongsIn(p), 0, false); break;
@@ -101,6 +129,13 @@ final class Folders {
                 case 4: move(a, p, changed); break;
                 case 5: delete(a, p, changed); break;
                 case 6: Drive.syncNow(a, p); break;
+                case 8:
+                    p.hidden = !p.hidden;
+                    lib.save();
+                    Toast.makeText(a, p.hidden ? "Hidden. Find it in ⋮ → Hidden folders." : "Shown again",
+                            Toast.LENGTH_SHORT).show();
+                    changed.run();
+                    break;
                 case 7: newFolder(a, p.id, f -> { changed.run(); open(a, f); }); break;
             }
             return true;

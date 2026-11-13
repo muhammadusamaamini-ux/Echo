@@ -183,7 +183,7 @@ public class PlaylistActivity extends Activity {
             finish();
             return;
         }
-        folders = lib.children(pl.id);
+        folders = lib.visibleChildren(pl.id);
         songs.setItems(lib.songsOf(pl));
         adapter.notifyDataSetChanged();
         titleView.setText(pl.name);

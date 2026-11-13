@@ -46,7 +46,7 @@ final class Library {
         String parentId;    // the folder this one is inside; null = top level
         String driveRoot;   // the Drive folder that was imported (kept in sync)
         String driveName;   // the folder's name in Drive at the last sync
-        String driveAccount; // Google account for private folders (null = shared link)
+        boolean hidden;     // hidden from the Playlists list (see "Hidden folders")
         final List<String> songIds = new ArrayList<>();
         final List<YtItem> ytItems = new ArrayList<>();
 
@@ -138,6 +138,11 @@ final class Library {
 
     List<Song> sortedSongs() {
         List<Song> list = new ArrayList<>(songs);
+        java.util.Set<String> hide = hiddenSongIds();
+        if (!hide.isEmpty()) {
+            java.util.Iterator<Song> it = list.iterator();
+            while (it.hasNext()) if (hide.contains(it.next().id)) it.remove();
+        }
         Collections.sort(list, (a, b) -> safe(a.title).compareToIgnoreCase(safe(b.title)));
         return list;
     }
@@ -197,6 +202,44 @@ final class Library {
         }
         Collections.sort(out, (a, b) -> safe(a.name).compareToIgnoreCase(safe(b.name)));
         return out;
+    }
+
+    /** Like children(), but without hidden folders (for showing on screen). */
+    List<Playlist> visibleChildren(String parentId) {
+        List<Playlist> out = children(parentId);
+        java.util.Iterator<Playlist> it = out.iterator();
+        while (it.hasNext()) if (it.next().hidden) it.remove();
+        return out;
+    }
+
+    /** True if the folder or any folder it is inside is hidden. */
+    boolean isHidden(Playlist p) {
+        Playlist cur = p;
+        int guard = 0;
+        while (cur != null && guard++ < 50) {
+            if (cur.hidden) return true;
+            cur = playlist(cur.parentId);
+        }
+        return false;
+    }
+
+    List<Playlist> hiddenFolders() {
+        List<Playlist> out = new ArrayList<>();
+        for (Playlist p : playlists) if (p.hidden) out.add(p);
+        Collections.sort(out, (a, b) -> path(a).compareToIgnoreCase(path(b)));
+        return out;
+    }
+
+    /** Songs that are only in hidden folders: they are left out of Songs and Search too. */
+    java.util.Set<String> hiddenSongIds() {
+        java.util.Set<String> inHidden = new java.util.HashSet<>();
+        java.util.Set<String> inVisible = new java.util.HashSet<>();
+        for (Playlist p : playlists) {
+            if (p.youtube) continue;
+            (isHidden(p) ? inHidden : inVisible).addAll(p.songIds);
+        }
+        inHidden.removeAll(inVisible);
+        return inHidden;
     }
 
     /** "Music › Pashto › Old" */
@@ -341,7 +384,7 @@ final class Library {
                 p.parentId = o.optString("parent", null);
                 p.driveRoot = o.optString("driveRoot", null);
                 p.driveName = o.optString("driveName", null);
-                p.driveAccount = o.optString("driveAccount", null);
+                p.hidden = o.optBoolean("hidden", false);
                 JSONArray ids = o.optJSONArray("songs");
                 if (ids != null) for (int j = 0; j < ids.length(); j++) p.songIds.add(ids.getString(j));
                 JSONArray yt = o.optJSONArray("yt");
@@ -388,7 +431,7 @@ final class Library {
                 if (p.parentId != null) o.put("parent", p.parentId);
                 if (p.driveRoot != null) o.put("driveRoot", p.driveRoot);
                 if (p.driveName != null) o.put("driveName", p.driveName);
-                if (p.driveAccount != null) o.put("driveAccount", p.driveAccount);
+                if (p.hidden) o.put("hidden", true);
                 JSONArray ids = new JSONArray();
                 for (String id : p.songIds) ids.put(id);
                 o.put("songs", ids);
