@@ -58,7 +58,7 @@ public class NowPlayingActivity extends Activity implements Player.Listener {
                 (int) (getResources().getDisplayMetrics().heightPixels * 0.45));
         art = new ImageView(this);
         art.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        art.setBackground(Ui.round(Ui.SURFACE2, Ui.dp(this, 10)));
+        art.setBackground(Ui.accentGrad(Ui.dp(this, 20)));
         art.setClipToOutline(true);
         body.addView(art, new LinearLayout.LayoutParams(size, size));
 

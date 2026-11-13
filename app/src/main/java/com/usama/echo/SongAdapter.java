@@ -123,9 +123,8 @@ final class SongAdapter extends BaseAdapter {
                 s.title.trim().substring(0, s.title.trim().offsetByCodePoints(0, 1)).toUpperCase();
         boolean sel = selected.contains(s.id);
         h.tile.setText(sel ? "✓" : letter);
-        h.tile.setBackground(Ui.round(sel ? Ui.ACCENT : Ui.colorFor(s.title), Ui.dp(ctx, 6)));
-        h.tile.setTextColor(sel ? 0xFF000000 : Ui.TEXT);
-        convert.setBackgroundColor(sel ? 0x332BD9A0 : 0);
+        h.tile.setBackground(sel ? Ui.accentGrad(Ui.dp(ctx, 10)) : Ui.gradFor(s.title, Ui.dp(ctx, 10)));
+        convert.setBackgroundColor(sel ? 0x3300D2FF : 0);
         h.more.setVisibility(selecting ? View.INVISIBLE : View.VISIBLE);
         h.title.setText(s.title);
         h.title.setTextColor(s.id.equals(currentId) ? Ui.ACCENT : Ui.TEXT);

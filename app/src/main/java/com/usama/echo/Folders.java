@@ -37,14 +37,16 @@ final class Folders {
         row.setPadding(Ui.dp(a, 16), Ui.dp(a, 8), Ui.dp(a, 4), Ui.dp(a, 8));
         int sub = lib.visibleChildren(p.id).size();
         if (p.youtube) {
-            row.addView(Ui.tile(a, "▶", 52, Ui.YT));
+            android.widget.TextView yt = Ui.tile(a, "▶", 52, Ui.YT);
+            yt.setBackground(Ui.ytGrad(Ui.dp(a, 12)));
+            row.addView(yt);
         } else {
             ImageView icon = new ImageView(a);
             icon.setImageResource(sub > 0 || p.songIds.isEmpty() ? R.drawable.ic_folder : R.drawable.ic_music);
             icon.setColorFilter(Ui.TEXT);
             int pad = Ui.dp(a, 13);
             icon.setPadding(pad, pad, pad, pad);
-            icon.setBackground(Ui.round(Ui.colorFor(p.name), Ui.dp(a, 6)));
+            icon.setBackground(Ui.gradFor(p.name, Ui.dp(a, 12)));
             row.addView(icon, new LinearLayout.LayoutParams(Ui.dp(a, 52), Ui.dp(a, 52)));
         }
         LinearLayout col = Ui.column(a);
@@ -76,6 +78,7 @@ final class Folders {
     }
 
     static void open(Activity a, Library.Playlist p) {
+        Library.get(a).markRecent(p.id);
         a.startActivity(new Intent(a, p.youtube ? YouTubeActivity.class : PlaylistActivity.class).putExtra("id", p.id));
     }
 

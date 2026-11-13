@@ -106,7 +106,10 @@ public class YouTubeActivity extends Activity {
             }
         };
         list.setAdapter(adapter);
-        list.setOnItemClickListener((p, v, pos, id) -> js("playAt(" + pos + ")"));
+        list.setOnItemClickListener((p, v, pos, id) -> {
+            Library.get(this).markRecent(pl.id);
+            js("playAt(" + pos + ")");
+        });
         root.addView(list, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
         setContentView(root);

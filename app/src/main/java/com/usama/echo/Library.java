@@ -74,6 +74,7 @@ final class Library {
     private final File file;
     final List<Song> songs = new ArrayList<>();
     final List<Playlist> playlists = new ArrayList<>();
+    final List<String> recent = new ArrayList<>(); // folder ids, most recent first
     private final Map<String, Song> byId = new HashMap<>();
 
     private Library(Context c) {
@@ -201,6 +202,30 @@ final class Library {
             if (parentId == null ? par == null : parentId.equals(par)) out.add(p);
         }
         Collections.sort(out, (a, b) -> safe(a.name).compareToIgnoreCase(safe(b.name)));
+        return out;
+    }
+
+    /** Remember that a folder was opened or played (for "Recently played"). */
+    void markRecent(String id) {
+        if (id == null) return;
+        recent.remove(id);
+        recent.add(0, id);
+        while (recent.size() > 12) recent.remove(recent.size() - 1);
+        save();
+    }
+
+    /** Up to n recent folders that still exist and aren't hidden; topped up with your other folders. */
+    List<Playlist> recentFolders(int n) {
+        List<Playlist> out = new ArrayList<>();
+        for (String id : recent) {
+            Playlist p = playlist(id);
+            if (p != null && !isHidden(p) && !out.contains(p)) out.add(p);
+            if (out.size() >= n) return out;
+        }
+        for (Playlist p : visibleChildren(null)) {
+            if (out.size() >= n) break;
+            if (!out.contains(p)) out.add(p);
+        }
         return out;
     }
 
@@ -372,6 +397,8 @@ final class Library {
                 s.added = o.optLong("added", 0);
                 addSong(s);
             }
+            JSONArray rc = root.optJSONArray("recent");
+            if (rc != null) for (int i = 0; i < rc.length(); i++) recent.add(rc.getString(i));
             JSONArray ps = root.optJSONArray("playlists");
             if (ps != null) for (int i = 0; i < ps.length(); i++) {
                 JSONObject o = ps.getJSONObject(i);
@@ -447,6 +474,9 @@ final class Library {
                 ps.put(o);
             }
             root.put("playlists", ps);
+            JSONArray rc = new JSONArray();
+            for (String id : recent) rc.put(id);
+            root.put("recent", rc);
             File tmp = new File(file.getPath() + ".tmp");
             try (FileOutputStream out = new FileOutputStream(tmp)) {
                 out.write(root.toString().getBytes(StandardCharsets.UTF_8));

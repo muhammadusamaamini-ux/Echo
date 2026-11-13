@@ -47,29 +47,39 @@ final class MiniPlayer implements Player.Listener {
         this.a = a;
         this.onTrackChanged = onTrackChanged;
         view = Ui.column(a);
-        view.setBackgroundColor(0xFF242424);
+        view.setPadding(Ui.dp(a, 10), Ui.dp(a, 4), Ui.dp(a, 10), Ui.dp(a, 6));
+        LinearLayout card = Ui.column(a);
+        android.graphics.drawable.GradientDrawable bg = Ui.round(Ui.PANEL, Ui.dp(a, 20));
+        bg.setStroke(Ui.dp(a, 1), 0x26FFFFFF);
+        card.setBackground(bg);
+        card.setClipToOutline(true);
+        card.setElevation(Ui.dp(a, 6));
+        view.addView(card);
         progress = new ProgressBar(a, null, android.R.attr.progressBarStyleHorizontal);
         progress.setMax(1000);
         progress.setProgressTintList(ColorStateList.valueOf(Ui.ACCENT));
-        progress.setProgressBackgroundTintList(ColorStateList.valueOf(0xFF444444));
-        view.addView(progress, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(a, 3)));
+        progress.setProgressBackgroundTintList(ColorStateList.valueOf(0x26FFFFFF));
 
         LinearLayout row = Ui.row(a);
-        row.setPadding(Ui.dp(a, 10), Ui.dp(a, 6), Ui.dp(a, 6), Ui.dp(a, 6));
+        row.setPadding(Ui.dp(a, 10), Ui.dp(a, 10), Ui.dp(a, 6), Ui.dp(a, 8));
         art = new ImageView(a);
         art.setScaleType(ImageView.ScaleType.CENTER_CROP);
         art.setClipToOutline(true);
-        art.setBackground(Ui.round(Ui.SURFACE2, Ui.dp(a, 4)));
-        row.addView(art, new LinearLayout.LayoutParams(Ui.dp(a, 44), Ui.dp(a, 44)));
+        art.setBackground(Ui.accentGrad(Ui.dp(a, 12)));
+        row.addView(art, new LinearLayout.LayoutParams(Ui.dp(a, 48), Ui.dp(a, 48)));
         LinearLayout col = Ui.column(a);
-        col.setPadding(Ui.dp(a, 10), 0, Ui.dp(a, 6), 0);
+        col.setPadding(Ui.dp(a, 12), 0, Ui.dp(a, 6), 0);
         title = Ui.line(a, "", 15, Ui.TEXT, true);
         artist = Ui.line(a, "", 13, Ui.SUB, false);
         col.addView(title);
         col.addView(artist);
         row.addView(col, Ui.weight());
-        playBtn = Ui.icon(a, R.drawable.ic_play, 48, Ui.TEXT);
+        playBtn = Ui.icon(a, R.drawable.ic_play, 46, 0xFF1A1446);
+        playBtn.setBackground(new android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(0x33000000),
+                Ui.round(Ui.TEXT, Ui.dp(a, 23)), null));
         row.addView(playBtn);
+        android.view.View gap = new android.view.View(a);
+        row.addView(gap, new LinearLayout.LayoutParams(Ui.dp(a, 4), 1));
         ImageButton next = Ui.icon(a, R.drawable.ic_next, 44, Ui.TEXT);
         row.addView(next);
         ImageButton close = Ui.icon(a, R.drawable.ic_close, 40, Ui.SUB);
@@ -80,7 +90,12 @@ final class MiniPlayer implements Player.Listener {
             view.setVisibility(View.GONE);
         });
         row.addView(close);
-        view.addView(row);
+        card.addView(row);
+        LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(a, 3));
+        plp.leftMargin = Ui.dp(a, 14);
+        plp.rightMargin = Ui.dp(a, 14);
+        plp.bottomMargin = Ui.dp(a, 4);
+        card.addView(progress, plp);
         view.setVisibility(View.GONE);
 
         playBtn.setOnClickListener(v -> { if (controller != null) Hub.togglePlay(controller); });
@@ -141,11 +156,16 @@ final class MiniPlayer implements Player.Listener {
             if (b != null) {
                 iv.setImageBitmap(b);
                 iv.setColorFilter(null);
+                iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                iv.setPadding(0, 0, 0, 0);
                 return;
             }
         }
         iv.setImageResource(R.drawable.ic_music);
-        iv.setColorFilter(Ui.DIM);
+        iv.setColorFilter(Ui.TEXT);
+        iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        int pad = Math.max(Ui.dp(iv.getContext(), 10), iv.getLayoutParams() == null ? 0 : iv.getLayoutParams().width / 4);
+        iv.setPadding(pad, pad, pad, pad);
     }
 
     private void updateProgress() {

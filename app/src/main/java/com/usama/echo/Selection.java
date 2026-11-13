@@ -31,7 +31,7 @@ final class Selection {
         this.a = a;
         this.adapter = adapter;
         bar = Ui.row(a);
-        bar.setBackgroundColor(0xFF1F3B33);
+        bar.setBackgroundColor(0xE62A1F5C);
         bar.setPadding(Ui.dp(a, 4), Ui.dp(a, 6), Ui.dp(a, 8), Ui.dp(a, 6));
         TextView close = Ui.text(a, "✕", 20, Ui.TEXT, false);
         close.setPadding(Ui.dp(a, 12), Ui.dp(a, 4), Ui.dp(a, 12), Ui.dp(a, 4));

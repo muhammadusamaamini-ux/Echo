@@ -18,19 +18,68 @@ import java.util.Locale;
 
 /** Small helpers for building the screens in code. */
 final class Ui {
-    static final int BG = 0xFF121212;
-    static final int SURFACE = 0xFF1C1C1C;
-    static final int SURFACE2 = 0xFF2A2A2A;
+    // "Midnight glass" theme: the window has a purple-blue gradient, screens are see-through on top of it.
+    static final int BG = 0x00000000;
+    static final int SURFACE = 0x14FFFFFF;
+    static final int SURFACE2 = 0x24FFFFFF;
     static final int TEXT = 0xFFFFFFFF;
-    static final int SUB = 0xFFB3B3B3;
-    static final int DIM = 0xFF6E6E6E;
-    static final int ACCENT = 0xFF2BD9A0;
+    static final int SUB = 0xFFB8B2E0;
+    static final int DIM = 0xFF8F89B8;
+    static final int ACCENT = 0xFF00D2FF;
+    static final int ACCENT2 = 0xFF9D4EDD;
+    static final int GLOW = 0xFF7DF9FF;
     static final int YT = 0xFFE53935;
+    static final int PANEL = 0xF0161236;
 
     private static final int[] TILE_COLORS = {
-            0xFF2D6A4F, 0xFF6A4C93, 0xFF1D3557, 0xFF9C6644, 0xFF7B2CBF,
-            0xFF005F73, 0xFFAE2012, 0xFF3A5A40, 0xFF5E548E, 0xFF8D5524
+            0xFF5E548E, 0xFF2D6A4F, 0xFF1D3557, 0xFF9C6644, 0xFF7B2CBF,
+            0xFF005F73, 0xFFAE2012, 0xFF3A5A40, 0xFF6A4C93, 0xFF8D5524
     };
+
+    /** Bright gradient pairs for icons and artwork. */
+    private static final int[][] GRADS = {
+            {0xFF00D2FF, 0xFF3A7BD5}, {0xFFF72585, 0xFF7209B7}, {0xFF4CC9F0, 0xFF4361EE},
+            {0xFFFFB703, 0xFFFB8500}, {0xFFFF4D6D, 0xFFC9184A}, {0xFF06D6A0, 0xFF118AB2},
+            {0xFFC77DFF, 0xFF7B2CBF}, {0xFFFF9E00, 0xFFFF5400}
+    };
+
+    static GradientDrawable gradFor(String key, float radiusPx) {
+        int h = key == null ? 0 : key.hashCode();
+        int[] g = GRADS[Math.abs(h % GRADS.length)];
+        GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TL_BR, g);
+        d.setCornerRadius(radiusPx);
+        return d;
+    }
+
+    static GradientDrawable accentGrad(float radiusPx) {
+        GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{ACCENT, ACCENT2});
+        d.setCornerRadius(radiusPx);
+        return d;
+    }
+
+    static GradientDrawable ytGrad(float radiusPx) {
+        GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0xFFFF4D6D, 0xFFC9184A});
+        d.setCornerRadius(radiusPx);
+        return d;
+    }
+
+    /** See-through "glass" card. */
+    static GradientDrawable glass(Context c, float radiusDp) {
+        GradientDrawable g = round(0x17FFFFFF, dp(c, radiusDp));
+        g.setStroke(dp(c, 1), 0x26FFFFFF);
+        return g;
+    }
+
+    /** Cyan-to-purple text, like the "Good evening" title. */
+    static void gradientText(final TextView t) {
+        t.post(() -> {
+            float w = t.getPaint().measureText(t.getText().toString());
+            if (w <= 0) return;
+            t.getPaint().setShader(new android.graphics.LinearGradient(0, 0, w, 0, GLOW, 0xFFC77DFF,
+                    android.graphics.Shader.TileMode.CLAMP));
+            t.invalidate();
+        });
+    }
 
     private Ui() {}
 
@@ -87,10 +136,13 @@ final class Ui {
         t.setGravity(Gravity.CENTER);
         t.setPadding(dp(c, 16), dp(c, 9), dp(c, 16), dp(c, 9));
         if (filled) {
-            ripple(t, ACCENT, dp(c, 24));
+            t.setTextColor(TEXT);
+            t.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), accentGrad(dp(c, 24)),
+                    round(Color.WHITE, dp(c, 24))));
         } else {
             GradientDrawable g = round(0, dp(c, 24));
-            g.setStroke(dp(c, 1), 0xFF5A5A5A);
+            g.setColor(0x17FFFFFF);
+            g.setStroke(dp(c, 1), 0x33FFFFFF);
             t.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), g,
                     round(Color.WHITE, dp(c, 24))));
         }
@@ -111,7 +163,7 @@ final class Ui {
         }
         TextView t = text(c, letter, sizeDp * 0.42f, TEXT, true);
         t.setGravity(Gravity.CENTER);
-        t.setBackground(round(color, dp(c, 6)));
+        t.setBackground(color == SURFACE2 ? glass(c, 10) : gradFor(name, dp(c, 10)));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(c, sizeDp), dp(c, sizeDp));
         t.setLayoutParams(lp);
         return t;

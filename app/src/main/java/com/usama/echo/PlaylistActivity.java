@@ -137,6 +137,7 @@ public class PlaylistActivity extends Activity {
             } else if (selection.active()) {
                 selection.toggle(pos - folders.size());
             } else {
+                Library.get(this).markRecent(pl.id);
                 Hub.play(this, songs.items(), pos - folders.size(), false);
             }
         });
@@ -204,6 +205,7 @@ public class PlaylistActivity extends Activity {
             Toast.makeText(this, "No songs in this folder yet", Toast.LENGTH_SHORT).show();
             return;
         }
+        Library.get(this).markRecent(pl.id);
         Hub.play(this, all, 0, shuffle);
     }
 

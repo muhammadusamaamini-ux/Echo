@@ -34,9 +34,17 @@ import java.util.Locale;
 public class MainActivity extends Activity {
     private static final int REQ_FILES = 1, REQ_PERM = 2, REQ_WEB = 3, REQ_NOTIFY = 4;
 
-    private final TextView[] tabs = new TextView[3];
-    private final View[] pages = new View[3];
-    private int tab;
+    private static final int P_HOME = 0, P_SONGS = 1, P_FILTER = 2, P_SEARCH = 3, P_LIBRARY = 4;
+    private final View[] pages = new View[5];
+    private final TextView[] chips = new TextView[4];
+    private final LinearLayout[] navItems = new LinearLayout[3];
+    private int nav, chip;
+    private TextView greeting;
+    private android.widget.HorizontalScrollView chipScroll;
+    private LinearLayout homeBox;
+    private List<Library.Playlist> filtered = new ArrayList<>();
+    private BaseAdapter filterAdapter;
+    private TextView filterEmpty;
     private SongAdapter songAdapter, searchAdapter;
     private BaseAdapter listAdapter;
     private List<Library.Playlist> playlists = new ArrayList<>();
@@ -53,40 +61,54 @@ public class MainActivity extends Activity {
         LinearLayout root = Ui.column(this);
         root.setBackgroundColor(Ui.BG);
 
-        // Header
+        // Header: greeting, + and ⋮
         LinearLayout head = Ui.row(this);
-        head.setPadding(Ui.dp(this, 20), Ui.dp(this, 14), Ui.dp(this, 16), Ui.dp(this, 6));
-        TextView name = Ui.text(this, "Echo", 28, Ui.TEXT, true);
-        head.addView(name, Ui.weight());
-        TextView imp = Ui.pill(this, "+ Import", true);
-        imp.setOnClickListener(v -> showImport());
-        head.addView(imp);
+        head.setPadding(Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 8), Ui.dp(this, 4));
+        android.widget.ImageView avatar = new android.widget.ImageView(this);
+        avatar.setImageResource(R.drawable.ic_music);
+        avatar.setColorFilter(Ui.TEXT);
+        int ap = Ui.dp(this, 9);
+        avatar.setPadding(ap, ap, ap, ap);
+        avatar.setBackground(Ui.accentGrad(Ui.dp(this, 21)));
+        head.addView(avatar, new LinearLayout.LayoutParams(Ui.dp(this, 42), Ui.dp(this, 42)));
+        greeting = Ui.line(this, greetingText(), 26, Ui.TEXT, true);
+        greeting.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 4), 0);
+        head.addView(greeting, Ui.weight());
+        Ui.gradientText(greeting);
+        ImageButton add = Ui.icon(this, R.drawable.ic_add, 44, Ui.TEXT);
+        add.setOnClickListener(this::addMenu);
+        head.addView(add);
         ImageButton menu = Ui.icon(this, R.drawable.ic_more, 44, Ui.TEXT);
         menu.setOnClickListener(this::mainMenu);
         head.addView(menu);
         root.addView(head);
 
-        // Tabs
-        LinearLayout tabRow = Ui.row(this);
-        tabRow.setPadding(Ui.dp(this, 14), Ui.dp(this, 6), Ui.dp(this, 14), Ui.dp(this, 8));
-        String[] labels = {"Playlists", "Songs", "Search"};
-        for (int i = 0; i < 3; i++) {
+        // Filter chips (Home)
+        chipScroll = new android.widget.HorizontalScrollView(this);
+        chipScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout chipRow = Ui.row(this);
+        chipRow.setPadding(Ui.dp(this, 14), Ui.dp(this, 10), Ui.dp(this, 14), Ui.dp(this, 6));
+        String[] labels = {"Playlists", "Songs", "YouTube", "Drive"};
+        for (int i = 0; i < 4; i++) {
             TextView t = Ui.text(this, labels[i], 14, Ui.TEXT, true);
-            t.setPadding(Ui.dp(this, 16), Ui.dp(this, 7), Ui.dp(this, 16), Ui.dp(this, 7));
+            t.setPadding(Ui.dp(this, 18), Ui.dp(this, 8), Ui.dp(this, 18), Ui.dp(this, 8));
             final int idx = i;
-            t.setOnClickListener(v -> showTab(idx));
+            t.setOnClickListener(v -> showChip(idx));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT);
             lp.rightMargin = Ui.dp(this, 8);
-            tabRow.addView(t, lp);
-            tabs[i] = t;
+            chipRow.addView(t, lp);
+            chips[i] = t;
         }
-        root.addView(tabRow);
+        chipScroll.addView(chipRow);
+        root.addView(chipScroll);
 
         FrameLayout content = new FrameLayout(this);
-        pages[0] = buildPlaylistsPage();
-        pages[1] = buildSongsPage();
-        pages[2] = buildSearchPage();
+        pages[P_HOME] = buildHomePage();
+        pages[P_SONGS] = buildSongsPage();
+        pages[P_FILTER] = buildFilterPage();
+        pages[P_SEARCH] = buildSearchPage();
+        pages[P_LIBRARY] = buildPlaylistsPage();
         for (View p : pages) content.addView(p, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         root.addView(content, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -97,9 +119,10 @@ public class MainActivity extends Activity {
             if (searchAdapter != null) searchAdapter.setCurrent(id);
         });
         root.addView(mini.view);
+        root.addView(buildNav());
 
         setContentView(root);
-        showTab(0);
+        showNav(0);
         refresh();
         handleShare(getIntent());
         setupUpdates(getIntent());
@@ -346,15 +369,260 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void showTab(int i) {
-        exitSelections();
-        tab = i;
-        for (int k = 0; k < 3; k++) {
-            boolean on = k == i;
-            pages[k].setVisibility(on ? View.VISIBLE : View.GONE);
-            tabs[k].setTextColor(on ? 0xFF000000 : Ui.TEXT);
-            tabs[k].setBackground(Ui.round(on ? Ui.ACCENT : Ui.SURFACE2, Ui.dp(this, 20)));
+    private String greetingText() {
+        int h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        if (h >= 4 && h < 12) return "Good morning";
+        if (h >= 12 && h < 17) return "Good afternoon";
+        return "Good evening";
+    }
+
+    // ---------- bottom bar: Home, Search, Library ----------
+
+    private View buildNav() {
+        LinearLayout bar = Ui.row(this);
+        bar.setBackgroundColor(0xEB0B0B1E);
+        bar.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
+        String[] labels = {"Home", "Search", "Library"};
+        int[] icons = {R.drawable.ic_home, R.drawable.ic_search, R.drawable.ic_library};
+        for (int i = 0; i < 3; i++) {
+            LinearLayout item = Ui.column(this);
+            item.setGravity(Gravity.CENTER);
+            item.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 4));
+            android.widget.ImageView icon = new android.widget.ImageView(this);
+            icon.setImageResource(icons[i]);
+            item.addView(icon, new LinearLayout.LayoutParams(Ui.dp(this, 26), Ui.dp(this, 26)));
+            TextView t = Ui.text(this, labels[i], 12, Ui.DIM, false);
+            t.setGravity(Gravity.CENTER);
+            item.addView(t);
+            final int idx = i;
+            item.setOnClickListener(v -> showNav(idx));
+            Ui.ripple(item, 0, Ui.dp(this, 16));
+            bar.addView(item, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            navItems[i] = item;
         }
+        return bar;
+    }
+
+    private void showNav(int i) {
+        nav = i;
+        for (int k = 0; k < 3; k++) {
+            int c = k == i ? Ui.GLOW : Ui.DIM;
+            ((android.widget.ImageView) navItems[k].getChildAt(0)).setColorFilter(c);
+            ((TextView) navItems[k].getChildAt(1)).setTextColor(c);
+        }
+        chipScroll.setVisibility(i == 0 ? View.VISIBLE : View.GONE);
+        if (i == 0) showChip(chip);
+        else showPage(i == 1 ? P_SEARCH : P_LIBRARY);
+    }
+
+    private void showChip(int c) {
+        chip = c;
+        for (int k = 0; k < 4; k++) {
+            boolean on = k == c;
+            chips[k].setTextColor(on ? Ui.TEXT : Ui.SUB);
+            chips[k].setBackground(on ? Ui.accentGrad(Ui.dp(this, 20)) : Ui.glass(this, 20));
+        }
+        if (c == 0) showPage(P_HOME);
+        else if (c == 1) showPage(P_SONGS);
+        else {
+            refreshFilter();
+            showPage(P_FILTER);
+        }
+    }
+
+    private void showPage(int p) {
+        exitSelections();
+        for (int k = 0; k < pages.length; k++) pages[k].setVisibility(k == p ? View.VISIBLE : View.GONE);
+    }
+
+    // ---------- Home: Recently played + Your folders ----------
+
+    private View buildHomePage() {
+        android.widget.ScrollView sv = new android.widget.ScrollView(this);
+        sv.setVerticalScrollBarEnabled(false);
+        homeBox = Ui.column(this);
+        homeBox.setPadding(0, 0, 0, Ui.dp(this, 16));
+        sv.addView(homeBox);
+        return sv;
+    }
+
+    private TextView section(String title) {
+        TextView t = Ui.text(this, title, 20, Ui.TEXT, true);
+        t.setPadding(Ui.dp(this, 16), Ui.dp(this, 18), Ui.dp(this, 16), Ui.dp(this, 10));
+        return t;
+    }
+
+    private void refreshHome() {
+        homeBox.removeAllViews();
+        Library lib = Library.get(this);
+        List<Library.Playlist> recent = lib.recentFolders(4);
+        List<Library.Playlist> top = lib.visibleChildren(null);
+        if (top.isEmpty() && recent.isEmpty()) {
+            TextView empty = Ui.text(this, "Welcome to Echo.\n\nTap + to add music from a Google Drive folder, "
+                    + "a YouTube playlist, or your phone.", 16, Ui.SUB, false);
+            empty.setGravity(Gravity.CENTER);
+            empty.setPadding(Ui.dp(this, 32), Ui.dp(this, 80), Ui.dp(this, 32), 0);
+            homeBox.addView(empty);
+            return;
+        }
+        if (!recent.isEmpty()) {
+            homeBox.addView(section("Recently played"));
+            LinearLayout grid = Ui.column(this);
+            grid.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 12), 0);
+            for (int i = 0; i < recent.size(); i += 2) {
+                LinearLayout row = Ui.row(this);
+                row.addView(recentTile(recent.get(i)), tileLp());
+                if (i + 1 < recent.size()) row.addView(recentTile(recent.get(i + 1)), tileLp());
+                else row.addView(new View(this), tileLp());
+                grid.addView(row);
+            }
+            homeBox.addView(grid);
+        }
+        homeBox.addView(section("Your folders"));
+        android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(this);
+        hs.setHorizontalScrollBarEnabled(false);
+        LinearLayout cards = Ui.row(this);
+        cards.setGravity(Gravity.TOP);
+        cards.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 12), 0);
+        for (Library.Playlist p : top) cards.addView(folderCard(p));
+        cards.addView(newFolderCard());
+        hs.addView(cards);
+        homeBox.addView(hs);
+    }
+
+    private LinearLayout.LayoutParams tileLp() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(this, 60), 1f);
+        lp.setMargins(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4));
+        return lp;
+    }
+
+    private android.widget.ImageView gradIcon(Library.Playlist p, int sizeDp, int iconDp, float radiusDp) {
+        android.widget.ImageView icon = new android.widget.ImageView(this);
+        boolean folder = !Library.get(this).children(p.id).isEmpty() || p.songIds.isEmpty();
+        icon.setImageResource(p.youtube ? R.drawable.ic_play : folder ? R.drawable.ic_folder : R.drawable.ic_music);
+        icon.setColorFilter(Ui.TEXT);
+        icon.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        int pad = Ui.dp(this, (sizeDp - iconDp) / 2f);
+        icon.setPadding(pad, pad, pad, pad);
+        icon.setBackground(p.youtube ? Ui.ytGrad(Ui.dp(this, radiusDp)) : Ui.gradFor(p.name, Ui.dp(this, radiusDp)));
+        return icon;
+    }
+
+    private View recentTile(Library.Playlist p) {
+        LinearLayout t = Ui.row(this);
+        t.setPadding(Ui.dp(this, 8), 0, Ui.dp(this, 8), 0);
+        Ui.ripple(t, 0, Ui.dp(this, 14));
+        t.setBackground(new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(0x33FFFFFF), Ui.glass(this, 14), null));
+        t.addView(gradIcon(p, 42, 22, 11), new LinearLayout.LayoutParams(Ui.dp(this, 42), Ui.dp(this, 42)));
+        TextView n = Ui.line(this, p.name, 14, Ui.TEXT, true);
+        n.setPadding(Ui.dp(this, 10), 0, 0, 0);
+        t.addView(n, Ui.weight());
+        t.setOnClickListener(v -> Folders.open(this, p));
+        t.setOnLongClickListener(v -> {
+            Folders.menu(this, v, p, this::refresh);
+            return true;
+        });
+        return t;
+    }
+
+    private View folderCard(Library.Playlist p) {
+        LinearLayout c = Ui.column(this);
+        int w = Ui.dp(this, 150);
+        c.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 12));
+        c.setBackground(new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(0x33FFFFFF), Ui.glass(this, 18), null));
+        c.addView(gradIcon(p, 130, 54, 14), new LinearLayout.LayoutParams(w - Ui.dp(this, 20), Ui.dp(this, 112)));
+        TextView n = Ui.line(this, p.name, 15, Ui.TEXT, true);
+        n.setPadding(0, Ui.dp(this, 10), 0, 0);
+        c.addView(n);
+        int sub = Library.get(this).visibleChildren(p.id).size();
+        c.addView(Ui.line(this, p.subtitle(sub) + (p.driveFolder != null ? "  ·  Drive" : ""), 12, Ui.SUB, false));
+        c.setOnClickListener(v -> Folders.open(this, p));
+        c.setOnLongClickListener(v -> {
+            Folders.menu(this, v, p, this::refresh);
+            return true;
+        });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(Ui.dp(this, 4), 0, Ui.dp(this, 4), 0);
+        c.setLayoutParams(lp);
+        return c;
+    }
+
+    private View newFolderCard() {
+        LinearLayout c = Ui.column(this);
+        c.setGravity(Gravity.CENTER);
+        android.graphics.drawable.GradientDrawable g = Ui.round(0x0DFFFFFF, Ui.dp(this, 18));
+        g.setStroke(Ui.dp(this, 1), 0x40FFFFFF, Ui.dp(this, 6), Ui.dp(this, 4));
+        c.setBackground(g);
+        android.widget.ImageView plus = new android.widget.ImageView(this);
+        plus.setImageResource(R.drawable.ic_add);
+        plus.setColorFilter(Ui.SUB);
+        c.addView(plus, new LinearLayout.LayoutParams(Ui.dp(this, 40), Ui.dp(this, 40)));
+        TextView t = Ui.text(this, "New folder", 13, Ui.SUB, false);
+        t.setPadding(0, Ui.dp(this, 6), 0, 0);
+        c.addView(t);
+        c.setOnClickListener(v -> Folders.newFolder(this, null, f -> { refresh(); openPlaylist(f); }));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Ui.dp(this, 150), Ui.dp(this, 190));
+        lp.setMargins(Ui.dp(this, 4), 0, Ui.dp(this, 4), 0);
+        c.setLayoutParams(lp);
+        return c;
+    }
+
+    // ---------- YouTube / Drive chips ----------
+
+    private View buildFilterPage() {
+        FrameLayout f = new FrameLayout(this);
+        ListView list = new ListView(this);
+        list.setDivider(null);
+        filterAdapter = new BaseAdapter() {
+            @Override public int getCount() { return filtered.size(); }
+            @Override public Object getItem(int i) { return filtered.get(i); }
+            @Override public long getItemId(int i) { return i; }
+
+            @Override
+            public View getView(int i, View convert, ViewGroup parent) {
+                return Folders.row(MainActivity.this, filtered.get(i), MainActivity.this::refresh);
+            }
+        };
+        list.setAdapter(filterAdapter);
+        list.setOnItemClickListener((p, v, pos, id) -> Folders.open(this, filtered.get(pos)));
+        filterEmpty = Ui.text(this, "", 15, Ui.SUB, false);
+        filterEmpty.setGravity(Gravity.CENTER);
+        filterEmpty.setPadding(Ui.dp(this, 32), 0, Ui.dp(this, 32), Ui.dp(this, 60));
+        f.addView(list);
+        f.addView(filterEmpty, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        list.setEmptyView(filterEmpty);
+        return f;
+    }
+
+    private void refreshFilter() {
+        Library lib = Library.get(this);
+        filtered = new ArrayList<>();
+        for (Library.Playlist p : lib.playlists) {
+            if (lib.isHidden(p)) continue;
+            if (chip == 2 && p.youtube) filtered.add(p);
+            if (chip == 3 && p.driveFolder != null && (p.driveRoot == null || p.driveRoot.equals(p.driveFolder))) {
+                filtered.add(p);
+            }
+        }
+        java.util.Collections.sort(filtered, (x, y) -> x.name.compareToIgnoreCase(y.name));
+        filterEmpty.setText(chip == 2 ? "No YouTube playlists yet.\n\nTap + → Import music → YouTube playlist."
+                : "No Google Drive folders yet.\n\nTap + → Import music → Google Drive folder.");
+        filterAdapter.notifyDataSetChanged();
+    }
+
+    private void addMenu(View anchor) {
+        PopupMenu m = new PopupMenu(this, anchor);
+        m.getMenu().add(0, 1, 0, "Import music");
+        m.getMenu().add(0, 2, 1, "New folder");
+        m.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == 1) showImport();
+            else Folders.newFolder(this, null, f -> { refresh(); openPlaylist(f); });
+            return true;
+        });
+        m.show();
     }
 
     void refresh() {
@@ -363,6 +631,12 @@ public class MainActivity extends Activity {
         playlists = lib.visibleChildren(null);
         listAdapter.notifyDataSetChanged();
         if (searchBox != null) runSearch();
+        refreshHome();
+        if (chip >= 2) refreshFilter();
+        if (greeting != null && !greeting.getText().toString().equals(greetingText())) {
+            greeting.setText(greetingText());
+            Ui.gradientText(greeting);
+        }
     }
 
     @Override
@@ -375,7 +649,8 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if ((songSel != null && songSel.active()) || (searchSel != null && searchSel.active())) exitSelections();
-        else if (tab != 0) showTab(0);
+        else if (nav != 0) showNav(0);
+        else if (chip != 0) showChip(0);
         else super.onBackPressed();
     }
 
