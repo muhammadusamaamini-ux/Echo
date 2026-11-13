@@ -24,11 +24,12 @@ import java.util.Map;
 final class Library {
 
     static final class Song {
-        String id, title, artist, album, uri, source; // source: "file" (copied into the app) or "device"
+        String id, title, artist, album, uri, source; // source: "file" (copied into the app), "device" or "drive" (played online)
         long duration, added;
 
         String subtitle() {
             String a = (artist == null || artist.isEmpty() || "<unknown>".equals(artist)) ? "Unknown artist" : artist;
+            if ("drive".equals(source)) return a + "  ·  Drive";
             return duration > 0 ? a + "  ·  " + Ui.time(duration) : a;
         }
     }
@@ -41,6 +42,7 @@ final class Library {
         String id, name;
         boolean youtube;
         String ytListId;
+        String driveFolder; // set for playlists that play from a Google Drive folder
         final List<String> songIds = new ArrayList<>();
         final List<YtItem> ytItems = new ArrayList<>();
 
@@ -143,6 +145,11 @@ final class Library {
         return null;
     }
 
+    Playlist playlistForDrive(String folderId) {
+        for (Playlist p : playlists) if (folderId.equals(p.driveFolder)) return p;
+        return null;
+    }
+
     List<Playlist> localPlaylists() {
         List<Playlist> out = new ArrayList<>();
         for (Playlist p : playlists) if (!p.youtube) out.add(p);
@@ -232,6 +239,7 @@ final class Library {
                 p.name = o.optString("name", "Playlist");
                 p.youtube = o.optBoolean("youtube", false);
                 p.ytListId = o.optString("ytListId", null);
+                p.driveFolder = o.optString("driveFolder", null);
                 JSONArray ids = o.optJSONArray("songs");
                 if (ids != null) for (int j = 0; j < ids.length(); j++) p.songIds.add(ids.getString(j));
                 JSONArray yt = o.optJSONArray("yt");
@@ -274,6 +282,7 @@ final class Library {
                 o.put("name", p.name);
                 o.put("youtube", p.youtube);
                 if (p.ytListId != null) o.put("ytListId", p.ytListId);
+                if (p.driveFolder != null) o.put("driveFolder", p.driveFolder);
                 JSONArray ids = new JSONArray();
                 for (String id : p.songIds) ids.put(id);
                 o.put("songs", ids);

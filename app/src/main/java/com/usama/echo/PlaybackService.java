@@ -30,7 +30,7 @@ public class PlaybackService extends MediaSessionService {
                         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                         .build(), true)
                 .setHandleAudioBecomingNoisy(true)
-                .setWakeMode(C.WAKE_MODE_LOCAL)
+                .setWakeMode(C.WAKE_MODE_NETWORK)
                 .build();
         Intent open = new Intent(this, MainActivity.class);
         open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);

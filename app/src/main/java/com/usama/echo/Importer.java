@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-/** Brings songs into the library: files picked from Google Drive / phone storage, or the phone's music. */
+/** Brings songs into the library: files picked from phone storage, or the phone's music. */
 final class Importer {
     interface Progress {
         void onProgress(int done, int total);

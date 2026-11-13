@@ -187,8 +187,8 @@ public class YouTubeActivity extends Activity {
         }
         if (found.isEmpty()) {
             new AlertDialog.Builder(this).setTitle("No matches")
-                    .setMessage("None of these videos matched songs in your library. Import the audio files "
-                            + "(for example from Google Drive) first, then try again.")
+                    .setMessage("None of these videos matched songs in your library. Add your songs "
+                            + "(for example a Google Drive folder) first, then try again.")
                     .setPositiveButton("OK", null).show();
             return;
         }

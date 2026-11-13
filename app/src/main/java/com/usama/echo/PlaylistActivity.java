@@ -83,6 +83,10 @@ public class PlaylistActivity extends Activity {
         return lp;
     }
 
+    void reload() {
+        refresh();
+    }
+
     private void refresh() {
         List<Library.Song> songs = Library.get(this).songsOf(pl);
         adapter.setItems(songs);
@@ -149,10 +153,13 @@ public class PlaylistActivity extends Activity {
 
     private void showMenu(View anchor) {
         PopupMenu m = new PopupMenu(this, anchor);
-        m.getMenu().add(0, 1, 0, "Rename");
-        m.getMenu().add(0, 2, 1, "Delete playlist");
+        if (pl.driveFolder != null) m.getMenu().add(0, 3, 0, "Get new songs from Drive");
+        m.getMenu().add(0, 1, 1, "Rename");
+        m.getMenu().add(0, 2, 2, "Delete playlist");
         m.setOnMenuItemClickListener(item -> {
-            if (item.getItemId() == 1) {
+            if (item.getItemId() == 3) {
+                Drive.load(this, pl.driveFolder, pl);
+            } else if (item.getItemId() == 1) {
                 rename(this, pl, this::refresh);
             } else {
                 new AlertDialog.Builder(this).setMessage("Delete \"" + pl.name + "\"? The songs stay in your library.")

@@ -156,7 +156,7 @@ public class MainActivity extends Activity {
         songAdapter = new SongAdapter(this, this::songMenu);
         list.setAdapter(songAdapter);
         list.setOnItemClickListener((p, v, pos, id) -> Hub.play(this, songAdapter.items(), pos, false));
-        TextView empty = Ui.text(this, "No songs yet.\n\nTap \"+ Import\" to add music from Google Drive, "
+        TextView empty = Ui.text(this, "No songs yet.\n\nTap \"+ Import\" to play music from Google Drive, "
                 + "your phone, or a YouTube playlist.", 16, Ui.SUB, false);
         empty.setGravity(Gravity.CENTER);
         empty.setPadding(Ui.dp(this, 32), 0, Ui.dp(this, 32), Ui.dp(this, 60));
@@ -333,7 +333,7 @@ public class MainActivity extends Activity {
         m.getMenu().add(0, 2, 1, "Add to queue");
         m.getMenu().add(0, 3, 2, "Add to playlist…");
         m.getMenu().add(0, 4, 3, "Search on Google");
-        m.getMenu().add(0, 5, 4, s.source.equals("device") ? "Remove from Echo" : "Delete");
+        m.getMenu().add(0, 5, 4, s.source.equals("file") ? "Delete" : "Remove from Echo");
         m.setOnMenuItemClickListener(item -> {
             switch (item.getItemId()) {
                 case 1: Hub.playNext(this, s); toast("Plays next"); break;
@@ -349,11 +349,13 @@ public class MainActivity extends Activity {
     }
 
     private void confirmDelete(Library.Song s) {
-        String msg = s.source.equals("device")
+        String msg = s.source.equals("drive")
+                ? "Remove \"" + s.title + "\" from Echo? It stays in your Google Drive."
+                : s.source.equals("device")
                 ? "Remove \"" + s.title + "\" from Echo? The file stays on your phone."
                 : "Delete \"" + s.title + "\"? It is removed from Echo and all playlists.";
         new AlertDialog.Builder(this).setMessage(msg).setNegativeButton("Cancel", null)
-                .setPositiveButton(s.source.equals("device") ? "Remove" : "Delete", (d, w) -> {
+                .setPositiveButton(s.source.equals("file") ? "Delete" : "Remove", (d, w) -> {
                     Library.get(this).deleteSong(s);
                     refresh();
                 }).show();
@@ -451,15 +453,17 @@ public class MainActivity extends Activity {
 
     private void showImport() {
         String[] options = {
-                "Google Drive or phone files",
+                "Google Drive folder (plays online)",
+                "YouTube playlist",
                 "All music on this phone",
-                "YouTube playlist"
+                "Pick files on this phone"
         };
         new AlertDialog.Builder(this).setTitle("Import music")
                 .setItems(options, (d, which) -> {
-                    if (which == 0) pickFiles();
-                    else if (which == 1) importDevice();
-                    else YouTube.askLink(this, null);
+                    if (which == 0) Drive.askLink(this, null);
+                    else if (which == 1) YouTube.askLink(this, null);
+                    else if (which == 2) importDevice();
+                    else pickFiles();
                 }).show();
     }
 
@@ -470,7 +474,6 @@ public class MainActivity extends Activity {
         i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         try {
             startActivityForResult(i, REQ_FILES);
-            toast("Tap ☰ and choose Drive to pick songs from Google Drive");
         } catch (Exception e) {
             toast("No file picker found");
         }
@@ -480,10 +483,10 @@ public class MainActivity extends Activity {
         if (uris.isEmpty()) return;
         final TextView msg = Ui.text(this, "Copying songs…", 15, Ui.TEXT, false);
         msg.setPadding(Ui.dp(this, 24), Ui.dp(this, 20), Ui.dp(this, 24), Ui.dp(this, 8));
-        progressDialog = new AlertDialog.Builder(this).setTitle("Importing").setView(msg).setCancelable(false).show();
+        progressDialog = new AlertDialog.Builder(this).setTitle("Adding songs").setView(msg).setCancelable(false).show();
         Importer.importFiles(this, uris,
                 (done, total) -> msg.setText("Copying song " + (done + 1) + " of " + total
-                        + "…\nSongs from Google Drive download first, so this can take a while."),
+                        + "…"),
                 (added, failed) -> {
                     if (progressDialog != null) progressDialog.dismiss();
                     refresh();
@@ -573,13 +576,16 @@ public class MainActivity extends Activity {
         if (type == null) return;
         if (Intent.ACTION_SEND.equals(action) && type.startsWith("text/")) {
             String text = intent.getStringExtra(Intent.EXTRA_TEXT);
-            if (text != null && YouTube.listId(text) != null) {
+            if (text != null && Drive.folderId(text) != null && text.contains("drive.google.com")) {
+                int at = text.indexOf("http");
+                Drive.askLink(this, at >= 0 ? text.substring(at).split("\\s")[0] : text);
+            } else if (text != null && YouTube.listId(text) != null) {
                 String link = text;
                 int at = text.indexOf("http");
                 if (at >= 0) link = text.substring(at).split("\\s")[0];
                 YouTube.askLink(this, link);
             } else if (text != null) {
-                toast("That link isn't a YouTube playlist");
+                toast("That link isn't a YouTube playlist or Drive folder");
             }
         } else if (type.startsWith("audio/")) {
             List<Uri> uris = new ArrayList<>();
