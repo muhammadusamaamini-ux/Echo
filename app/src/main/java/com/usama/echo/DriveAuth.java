@@ -112,8 +112,9 @@ final class DriveAuth {
         String account = pendingAccount;
         pending = null;
         if (cb == null) return;
-        if (resultCode != Activity.RESULT_OK || data == null) {
-            cb.onError("Sign-in was cancelled.");
+        if (data == null) {
+            cb.onError(resultCode == Activity.RESULT_OK ? "Google didn't give access."
+                    : "Google closed the sign-in screen without giving access (no error code). " + SETUP_HINT);
             return;
         }
         try {
@@ -129,14 +130,24 @@ final class DriveAuth {
         }
     }
 
+    static final String SETUP_HINT = "Check in Google Cloud: the Android client has package com.usama.echo and the "
+            + "SHA-1 Claude gave you, the Google Drive API is enabled, and the app is published (or your Gmail is a "
+            + "test user).";
+
     static String explain(Exception e) {
         if (e instanceof ApiException) {
-            int code = ((ApiException) e).getStatusCode();
+            ApiException ae = (ApiException) e;
+            int code = ae.getStatusCode();
+            String status = ae.getMessage() == null ? "" : "\n\nGoogle said: " + ae.getMessage();
             if (code == 10) {
-                return "Google sign-in isn't set up for Echo yet (error 10). Finish the Google Cloud setup steps, "
-                        + "then try again.";
+                return "Google doesn't recognise Echo yet (error 10). " + SETUP_HINT + status;
             }
-            return "Google sign-in failed (error " + code + ").";
+            if (code == 16 || code == 12501) {
+                return "Google cancelled the sign-in (error " + code + "). If you didn't press back, this usually "
+                        + "means the setup isn't finished. " + SETUP_HINT + status;
+            }
+            if (code == 7) return "No internet connection (error 7). Try again." + status;
+            return "Google sign-in failed (error " + code + ")." + status;
         }
         String m = e.getMessage();
         return "Google sign-in failed" + (m == null ? "." : ": " + m);
