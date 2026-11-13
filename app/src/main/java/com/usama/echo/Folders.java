@@ -178,13 +178,25 @@ final class Folders {
     static void delete(Activity a, Library.Playlist p, Runnable after) {
         Library lib = Library.get(a);
         int inside = lib.countTree(p);
-        String msg = "Delete \"" + p.name + "\"" + (inside > 0 ? " and the " + inside
-                + (inside == 1 ? " folder" : " folders") + " inside it" : "") + "?\n\nThe songs stay in your library.";
-        new AlertDialog.Builder(a).setMessage(msg)
+        int songs = p.youtube ? 0 : lib.songsOnlyIn(p).size();
+        StringBuilder msg = new StringBuilder("This removes \"" + p.name + "\" from Echo");
+        if (inside > 0 || songs > 0) {
+            msg.append(" together with");
+            if (inside > 0) msg.append(" ").append(inside).append(inside == 1 ? " folder" : " folders");
+            if (inside > 0 && songs > 0) msg.append(" and");
+            if (songs > 0) msg.append(" ").append(songs).append(songs == 1 ? " song" : " songs");
+            msg.append(" inside it");
+        }
+        msg.append(".\n\nSongs that are also in your other folders stay there. Nothing is deleted from "
+                + "Google Drive or your phone");
+        if (p.driveFolder != null) msg.append(", and Echo stops syncing this Drive folder");
+        msg.append(".");
+        new AlertDialog.Builder(a).setTitle("Delete folder").setMessage(msg.toString())
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Delete", (d, w) -> {
-                    lib.deleteTree(p);
-                    lib.save();
+                    int n = lib.deleteTreeWithSongs(p);
+                    Toast.makeText(a, "Deleted \"" + p.name + "\"" + (n > 0 ? " and " + n + (n == 1 ? " song" : " songs") : ""),
+                            Toast.LENGTH_SHORT).show();
                     after.run();
                 }).show();
     }

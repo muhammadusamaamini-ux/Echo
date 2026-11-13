@@ -46,6 +46,21 @@ final class Updater {
         int build;
         String apkUrl;
         String error;
+        String notes = ""; // "What's new", from the GitHub release text
+    }
+
+    /** Release text without the GitHub/Claude bookkeeping lines. */
+    static String cleanNotes(String body) {
+        if (body == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (String line : body.split("\n")) {
+            String t = line.trim();
+            if (t.isEmpty() || t.startsWith("Co-Authored-By") || t.startsWith("Claude-Session")
+                    || t.startsWith("Download Echo.apk")) continue;
+            if (sb.length() > 0) sb.append('\n');
+            sb.append(t.startsWith("- ") ? "• " + t.substring(2) : t);
+        }
+        return sb.toString();
     }
 
     static int installedBuild(Context c) {
@@ -71,6 +86,7 @@ final class Updater {
             } else {
                 JSONObject j = new JSONObject(readAll(con.getInputStream()));
                 l.build = buildNumber(j.optString("tag_name"));
+                l.notes = cleanNotes(j.optString("body", ""));
                 JSONArray assets = j.optJSONArray("assets");
                 if (assets != null) {
                     for (int i = 0; i < assets.length(); i++) {
@@ -111,11 +127,11 @@ final class Updater {
         SharedPreferences sp = c.getSharedPreferences("updates", Context.MODE_PRIVATE);
         if (sp.getInt("notified", 0) == l.build) return true; // already told about this build
         sp.edit().putInt("notified", l.build).apply();
-        notifyUpdate(c, l.build);
+        notifyUpdate(c, l.build, l.notes);
         return true;
     }
 
-    private static void notifyUpdate(Context c, int build) {
+    private static void notifyUpdate(Context c, int build, String notes) {
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
         if (Build.VERSION.SDK_INT >= 33
@@ -137,7 +153,10 @@ final class Updater {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         b.setSmallIcon(R.drawable.ic_music)
                 .setContentTitle("Echo update available")
-                .setContentText("Build " + build + " is ready. Tap to install it.")
+                .setContentText(notes.isEmpty() ? "Build " + build + " is ready. Tap to install it."
+                        : "What's new: " + notes.replace('\n', ' '))
+                .setStyle(new Notification.BigTextStyle().bigText("Build " + build + " is ready. Tap to install it."
+                        + (notes.isEmpty() ? "" : "\n\nWhat's new:\n" + notes)))
                 .setContentIntent(pi)
                 .setAutoCancel(true);
         nm.notify(NOTIFY_ID, b.build());
@@ -176,8 +195,9 @@ final class Updater {
     private static void offer(Activity a, Latest l, int have) {
         new AlertDialog.Builder(a)
                 .setTitle("Update available")
-                .setMessage("Build " + l.build + " is ready (you have build " + have + "). "
-                        + "Download and install it now? Your music and playlists are kept.")
+                .setMessage("Build " + l.build + " is ready (you have build " + have + ")."
+                        + (l.notes.isEmpty() ? "" : "\n\nWhat's new:\n" + l.notes)
+                        + "\n\nDownload and install it now? Your music and playlists are kept.")
                 .setPositiveButton("Update", (d, w) -> download(a, l.apkUrl, l.build))
                 .setNegativeButton("Later", null)
                 .show();

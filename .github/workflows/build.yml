@@ -29,11 +29,14 @@ jobs:
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk Echo.apk
 
+      - name: Write "What's new" from the commit message
+        run: git log -1 --pretty=%B | grep -v -E '^(Co-Authored-By|Claude-Session):' > notes.md
+
       - name: Publish to Releases (download from your phone)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: Echo (build ${{ github.run_number }})
-          body: Download Echo.apk below and open it on your phone to install.
+          body_path: notes.md
           files: Echo.apk
           make_latest: true

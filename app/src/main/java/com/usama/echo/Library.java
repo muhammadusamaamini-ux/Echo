@@ -303,6 +303,40 @@ final class Library {
         playlists.remove(p);
     }
 
+    /** Every folder in the tree: the folder itself and everything inside it. */
+    List<Playlist> tree(Playlist p) {
+        List<Playlist> out = new ArrayList<>();
+        out.add(p);
+        for (int i = 0; i < out.size() && i < 5000; i++) out.addAll(children(out.get(i).id));
+        return out;
+    }
+
+    /**
+     * Songs that would leave Echo if this folder were deleted: those inside it (or its sub-folders)
+     * that aren't also in some folder outside it.
+     */
+    List<Song> songsOnlyIn(Playlist p) {
+        List<Playlist> inside = tree(p);
+        java.util.Set<String> ids = new java.util.LinkedHashSet<>();
+        for (Playlist t : inside) ids.addAll(t.songIds);
+        for (Playlist o : playlists) if (!inside.contains(o)) ids.removeAll(o.songIds);
+        List<Song> out = new ArrayList<>();
+        for (String id : ids) {
+            Song s = song(id);
+            if (s != null) out.add(s);
+        }
+        return out;
+    }
+
+    /** Deletes a folder, its sub-folders and the songs that are only in them. */
+    int deleteTreeWithSongs(Playlist p) {
+        List<Song> gone = songsOnlyIn(p);
+        deleteTree(p);
+        for (Song s : gone) removeSong(s);
+        save();
+        return gone.size();
+    }
+
     int countTree(Playlist p) {
         int n = 0;
         for (Playlist c : children(p.id)) n += 1 + countTree(c);
