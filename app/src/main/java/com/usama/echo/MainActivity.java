@@ -617,8 +617,10 @@ public class MainActivity extends Activity {
         PopupMenu m = new PopupMenu(this, anchor);
         m.getMenu().add(0, 1, 0, "Import music");
         m.getMenu().add(0, 2, 1, "New folder");
+        m.getMenu().add(0, 3, 2, "Download from YouTube link");
         m.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == 1) showImport();
+            else if (item.getItemId() == 3) Saver.askLink(this, null);
             else Folders.newFolder(this, null, f -> { refresh(); openPlaylist(f); });
             return true;
         });
@@ -881,13 +883,26 @@ public class MainActivity extends Activity {
             if (text != null && Drive.folderId(text) != null && text.contains("drive.google.com")) {
                 int at = text.indexOf("http");
                 Drive.askLink(this, at >= 0 ? text.substring(at).split("\\s")[0] : text);
-            } else if (text != null && YouTube.listId(text) != null) {
+            } else if (text != null && (YouTube.listId(text) != null || Saver.videoId(text) != null)) {
                 String link = text;
                 int at = text.indexOf("http");
                 if (at >= 0) link = text.substring(at).split("\\s")[0];
-                YouTube.askLink(this, link);
+                final String l = link;
+                String vid = Saver.videoId(link);
+                if (YouTube.listId(link) == null) {
+                    Saver.start(this, vid);
+                } else if (vid == null) {
+                    YouTube.askLink(this, link);
+                } else {
+                    new AlertDialog.Builder(this).setTitle("YouTube link")
+                            .setItems(new String[]{"Download this video (audio or video)", "Import the whole playlist"},
+                                    (d, which) -> {
+                                        if (which == 0) Saver.start(this, vid);
+                                        else YouTube.askLink(this, l);
+                                    }).show();
+                }
             } else if (text != null) {
-                toast("That link isn't a YouTube playlist or Drive folder");
+                toast("That link isn't a YouTube video, playlist or Drive folder");
             }
         } else if (type.startsWith("audio/")) {
             List<Uri> uris = new ArrayList<>();

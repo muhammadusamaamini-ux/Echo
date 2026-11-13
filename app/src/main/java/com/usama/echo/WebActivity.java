@@ -19,6 +19,7 @@ import android.widget.TextView;
 public class WebActivity extends Activity {
     private WebView web;
     private TextView importBtn;
+    private TextView downloadBtn;
     private TextView titleView;
     private ProgressBar loading;
 
@@ -37,6 +38,19 @@ public class WebActivity extends Activity {
             finish();
         });
         bar.addView(importBtn);
+        downloadBtn = Ui.pill(this, "Download", true);
+        downloadBtn.setVisibility(View.GONE);
+        downloadBtn.setOnClickListener(v -> {
+            String id = Saver.videoId(web.getUrl());
+            if (id != null) {
+                web.evaluateJavascript("try{document.querySelectorAll('video').forEach(function(v){v.pause()})}catch(e){}", null);
+                Saver.start(this, id);
+            }
+        });
+        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        dl.leftMargin = Ui.dp(this, 6);
+        bar.addView(downloadBtn, dl);
         root.addView(bar);
 
         loading = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
@@ -89,6 +103,9 @@ public class WebActivity extends Activity {
     private void onUrl(String url) {
         boolean list = url != null && url.contains("youtube.com") && YouTube.listId(url) != null;
         importBtn.setVisibility(list ? View.VISIBLE : View.GONE);
+        boolean video = url != null && (url.contains("youtube.com/") || url.contains("youtu.be/"))
+                && Saver.videoId(url) != null;
+        downloadBtn.setVisibility(video ? View.VISIBLE : View.GONE);
     }
 
     static Intent google(Activity a, String q) {

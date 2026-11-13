@@ -77,7 +77,22 @@ public class YouTubeActivity extends Activity {
         lp.leftMargin = Ui.dp(this, 8);
         open.setOnClickListener(v -> YouTube.openInYouTube(this, pl.ytListId, null));
         actions.addView(open, lp);
-        root.addView(actions);
+        TextView save = Ui.pill(this, "Download", false);
+        LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp2.leftMargin = Ui.dp(this, 8);
+        save.setOnClickListener(v -> {
+            if (current >= 0 && current < pl.ytItems.size()) {
+                Saver.start(this, pl.ytItems.get(current).videoId);
+            } else {
+                Toast.makeText(this, "Play a video first, or tap and hold a video in the list", Toast.LENGTH_LONG).show();
+            }
+        });
+        actions.addView(save, lp2);
+        android.widget.HorizontalScrollView scroll = new android.widget.HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);
+        scroll.addView(actions);
+        root.addView(scroll);
 
         ListView list = new ListView(this);
         list.setDivider(null);
@@ -109,6 +124,15 @@ public class YouTubeActivity extends Activity {
         list.setOnItemClickListener((p, v, pos, id) -> {
             Library.get(this).markRecent(pl.id);
             js("playAt(" + pos + ")");
+        });
+        list.setOnItemLongClickListener((p, v, pos, id) -> {
+            Library.YtItem it = pl.ytItems.get(pos);
+            new AlertDialog.Builder(this).setTitle(it.title)
+                    .setItems(new String[]{"Download (audio or video)", "Open in YouTube"}, (d, which) -> {
+                        if (which == 0) Saver.start(this, it.videoId);
+                        else YouTube.openInYouTube(this, null, it.videoId);
+                    }).show();
+            return true;
         });
         root.addView(list, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
