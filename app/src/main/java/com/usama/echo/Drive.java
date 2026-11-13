@@ -60,6 +60,7 @@ final class Drive {
     static final class Folder {
         Node root;
         int songCount;
+        boolean complete = true; // false if a sub-folder couldn't be read (then nothing is removed)
         String error;
     }
 
@@ -86,7 +87,10 @@ final class Drive {
     private static Node readNode(String folderId, String name, int depth, Set<String> seen, Folder f) throws Exception {
         if (depth > 8 || !seen.add(folderId)) return null;
         String html = get("https://drive.google.com/embeddedfolderview?id=" + folderId);
-        if (html == null) return null;
+        if (html == null) {
+            if (depth > 0) f.complete = false;
+            return null;
+        }
         Node n = new Node();
         n.id = folderId;
         n.name = name;
@@ -226,22 +230,14 @@ final class Drive {
                     return;
                 }
                 Library lib = Library.get(a);
-                int songsBefore = lib.songs.size();
-                int foldersBefore = lib.playlists.size();
-                Set<String> all = new HashSet<>();
-                collectIds(f.root, all);
-                Library.Playlist rootPl = sync(lib, f.root, existing != null ? existing.parentId : null, existing, all);
-                lib.save();
+                Result r = apply(lib, f, folderId, existing == null ? null : existing.parentId);
                 if (a instanceof MainActivity) ((MainActivity) a).refresh();
-                int newSongs = lib.songs.size() - songsBefore;
-                int newFolders = lib.playlists.size() - foldersBefore;
                 if (existing != null) {
-                    String m = newSongs == 0 && newFolders == 0 ? "Everything is up to date"
-                            : newSongs + " new songs" + (newFolders > 0 ? ", " + newFolders + " new folders" : "");
-                    android.widget.Toast.makeText(a, m, android.widget.Toast.LENGTH_SHORT).show();
+                    android.widget.Toast.makeText(a, r.summary("Everything is up to date"),
+                            android.widget.Toast.LENGTH_SHORT).show();
                     if (a instanceof PlaylistActivity) ((PlaylistActivity) a).reload();
                 } else {
-                    a.startActivity(new Intent(a, PlaylistActivity.class).putExtra("id", rootPl.id));
+                    a.startActivity(new Intent(a, PlaylistActivity.class).putExtra("id", r.root.id));
                 }
             });
         }).start();
@@ -252,30 +248,211 @@ final class Drive {
         for (Node c : n.children) collectIds(c, out);
     }
 
+    static final class Result {
+        Library.Playlist root;
+        int newSongs, removedSongs, newFolders, removedFolders;
+
+        boolean changed() {
+            return newSongs + removedSongs + newFolders + removedFolders > 0;
+        }
+
+        String summary(String none) {
+            if (!changed()) return none;
+            List<String> parts = new ArrayList<>();
+            if (newSongs > 0) parts.add(newSongs + (newSongs == 1 ? " new song" : " new songs"));
+            if (removedSongs > 0) parts.add(removedSongs + " removed");
+            if (newFolders > 0) parts.add(newFolders + (newFolders == 1 ? " new folder" : " new folders"));
+            if (removedFolders > 0) parts.add(removedFolders + (removedFolders == 1 ? " folder removed" : " folders removed"));
+            return android.text.TextUtils.join(", ", parts);
+        }
+
+        void add(Result o) {
+            newSongs += o.newSongs;
+            removedSongs += o.removedSongs;
+            newFolders += o.newFolders;
+            removedFolders += o.removedFolders;
+        }
+    }
+
+    /** Makes Echo match what is in Drive now. Must run on the main thread. */
+    static Result apply(Library lib, Folder f, String rootId, String parentForNew) {
+        Result r = new Result();
+        // What Echo had for this Drive folder before
+        List<Library.Playlist> oldNodes = new ArrayList<>();
+        Set<String> oldSongs = new HashSet<>();
+        for (Library.Playlist p : lib.playlists) {
+            if (p.driveFolder == null) continue;
+            if (rootId.equals(p.driveRoot) || rootId.equals(p.driveFolder)) {
+                oldNodes.add(p);
+                for (String id : p.songIds) if (id.startsWith("gd_")) oldSongs.add(id);
+            }
+        }
+        Set<String> allSongs = new HashSet<>();
+        Set<String> allFolders = new HashSet<>();
+        collectIds(f.root, allSongs);
+        collectFolders(f.root, allFolders);
+
+        Library.Playlist existingRoot = lib.playlistForDrive(rootId);
+        int foldersBefore = lib.playlists.size();
+        int songsBefore = lib.songs.size();
+        r.root = sync(lib, f.root, existingRoot != null ? existingRoot.parentId : parentForNew, existingRoot, allSongs, rootId);
+        r.newFolders = lib.playlists.size() - foldersBefore;
+        r.newSongs = lib.songs.size() - songsBefore;
+
+        if (f.complete) {
+            // Songs deleted from Drive
+            List<Library.Song> gone = new ArrayList<>();
+            for (String id : oldSongs) {
+                Library.Song s = lib.song(id);
+                if (s != null && !allSongs.contains(id) && "drive".equals(s.source)) gone.add(s);
+            }
+            for (Library.Song s : gone) lib.deleteSongQuiet(s);
+            r.removedSongs = gone.size();
+            // Folders deleted from Drive (your own folders inside them are kept, one level up)
+            for (Library.Playlist p : oldNodes) {
+                if (p == r.root || allFolders.contains(p.driveFolder)) continue;
+                for (Library.Playlist c : lib.children(p.id)) c.parentId = p.parentId;
+                lib.playlists.remove(p);
+                r.removedFolders++;
+            }
+        }
+        lib.save();
+        return r;
+    }
+
+    private static void collectFolders(Node n, Set<String> out) {
+        out.add(n.id);
+        for (Node c : n.children) collectFolders(c, out);
+    }
+
     /**
-     * Makes the folder (and its sub-folders) match Drive. Folders you moved somewhere else in Echo stay where
-     * you put them; only folders that are new in Drive are created, inside their Drive parent.
+     * Makes one folder (and its sub-folders) match Drive. Folders you moved somewhere else in Echo stay where
+     * you put them; folders that are new in Drive are created inside their Drive parent.
      */
-    private static Library.Playlist sync(Library lib, Node n, String parentId, Library.Playlist forced, Set<String> all) {
+    private static Library.Playlist sync(Library lib, Node n, String parentId, Library.Playlist forced,
+                                         Set<String> all, String rootId) {
         Library.Playlist pl = forced != null ? forced : lib.playlistForDrive(n.id);
         if (pl == null) {
             pl = new Library.Playlist();
             pl.id = Library.newId();
             pl.name = n.name;
+            pl.driveName = n.name;
             pl.driveFolder = n.id;
             pl.parentId = parentId;
             lib.playlists.add(pl);
         }
         if (pl.driveFolder == null) pl.driveFolder = n.id;
+        pl.driveRoot = rootId;
+        // Renamed in Drive: follow it, unless you gave the folder your own name in Echo.
+        if (n.name != null && !n.name.equals(pl.driveName)) {
+            if (pl.driveName == null || pl.driveName.equals(pl.name)) pl.name = n.name;
+            pl.driveName = n.name;
+        }
         Set<String> here = new HashSet<>();
         for (Library.Song s : n.songs) {
             here.add(s.id);
-            if (!lib.has(s.id)) lib.addSong(s);
+            Library.Song old = lib.song(s.id);
+            if (old == null) {
+                lib.addSong(s);
+            } else if ("drive".equals(old.source)) { // file renamed in Drive
+                old.title = s.title;
+                old.artist = s.artist;
+                old.album = s.album;
+                old.uri = s.uri;
+            }
             if (!pl.songIds.contains(s.id)) pl.songIds.add(s.id);
         }
-        // Drive songs that now live in a sub-folder are shown there, not here.
+        // Drive songs that now live in another Drive folder are shown there, not here.
         pl.songIds.removeIf(id -> all.contains(id) && !here.contains(id));
-        for (Node c : n.children) sync(lib, c, pl.id, null, all);
+        for (Node c : n.children) sync(lib, c, pl.id, null, all, rootId);
         return pl;
+    }
+
+    // ---------- automatic sync ----------
+
+    interface SyncDone {
+        void onDone(Result total);
+    }
+
+    private static boolean syncing;
+
+    /** The Drive folders you imported (each is synced with all its sub-folders). */
+    private static List<String> roots(Library lib) {
+        Set<String> out = new java.util.LinkedHashSet<>();
+        for (Library.Playlist p : lib.playlists) {
+            if (p.driveFolder == null) continue;
+            if (p.driveRoot != null) {
+                out.add(p.driveRoot);
+            } else {
+                Library.Playlist parent = lib.playlist(p.parentId);
+                if (parent == null || parent.driveFolder == null) out.add(p.driveFolder);
+            }
+        }
+        return new ArrayList<>(out);
+    }
+
+    /** Checks every imported Drive folder for changes. Safe to call from any thread. */
+    static void syncAll(android.content.Context ctx, SyncDone done) {
+        final android.content.Context app = ctx.getApplicationContext();
+        final Handler main = new Handler(Looper.getMainLooper());
+        main.post(() -> {
+            if (syncing) {
+                if (done != null) done.onDone(new Result());
+                return;
+            }
+            final List<String> roots = roots(Library.get(app));
+            if (roots.isEmpty()) {
+                if (done != null) done.onDone(new Result());
+                return;
+            }
+            syncing = true;
+            new Thread(() -> {
+                final List<Folder> results = new ArrayList<>();
+                for (String id : roots) results.add(read(id));
+                main.post(() -> {
+                    Result total = new Result();
+                    Library lib = Library.get(app);
+                    for (int i = 0; i < roots.size(); i++) {
+                        Folder f = results.get(i);
+                        if (f.error != null || f.root == null) continue; // offline or unshared: change nothing
+                        if (lib.playlistForDrive(roots.get(i)) == null) continue; // you deleted it meanwhile
+                        total.add(apply(lib, f, roots.get(i), null));
+                    }
+                    syncing = false;
+                    app.getSharedPreferences("drive", android.content.Context.MODE_PRIVATE).edit()
+                            .putLong("lastSync", System.currentTimeMillis()).apply();
+                    if (done != null) done.onDone(total);
+                });
+            }).start();
+        });
+    }
+
+    /** Sync one imported folder now (from its ⋮ menu). */
+    static void syncNow(Activity a, Library.Playlist p) {
+        Library lib = Library.get(a);
+        String root = p.driveRoot != null ? p.driveRoot : p.driveFolder;
+        Library.Playlist rootPl = lib.playlistForDrive(root);
+        load(a, root, rootPl != null ? rootPl : p);
+    }
+
+    static long lastSync(android.content.Context c) {
+        return c.getSharedPreferences("drive", android.content.Context.MODE_PRIVATE).getLong("lastSync", 0);
+    }
+
+    /** Runs a Drive check about every hour when there is internet, even when Echo is closed. */
+    static void schedule(android.content.Context c) {
+        android.app.job.JobScheduler js =
+                (android.app.job.JobScheduler) c.getSystemService(android.content.Context.JOB_SCHEDULER_SERVICE);
+        if (js == null || js.getPendingJob(78) != null) return;
+        android.app.job.JobInfo job = new android.app.job.JobInfo.Builder(78,
+                new android.content.ComponentName(c, DriveSyncJob.class))
+                .setRequiredNetworkType(android.app.job.JobInfo.NETWORK_TYPE_ANY)
+                .setPeriodic(60 * 60 * 1000L)
+                .setPersisted(true)
+                .build();
+        try {
+            js.schedule(job);
+        } catch (Exception ignored) {
+        }
     }
 }

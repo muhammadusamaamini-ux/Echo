@@ -103,6 +103,17 @@ public class MainActivity extends Activity {
         refresh();
         handleShare(getIntent());
         setupUpdates(getIntent());
+        Drive.schedule(this);
+    }
+
+    /** Checks the imported Drive folders for changes whenever Echo is opened. */
+    private void syncDrive() {
+        if (System.currentTimeMillis() - Drive.lastSync(this) < 2 * 60 * 1000L) return;
+        Drive.syncAll(this, r -> {
+            if (isFinishing()) return;
+            refresh();
+            if (r.changed()) toast("Google Drive: " + r.summary(""));
+        });
     }
 
     // ---------- updates ----------
@@ -355,6 +366,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refresh();
+        syncDrive();
     }
 
     @Override

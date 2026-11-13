@@ -44,6 +44,8 @@ final class Library {
         String ytListId;
         String driveFolder; // set for playlists that play from a Google Drive folder
         String parentId;    // the folder this one is inside; null = top level
+        String driveRoot;   // the Drive folder that was imported (kept in sync)
+        String driveName;   // the folder's name in Drive at the last sync
         final List<String> songIds = new ArrayList<>();
         final List<YtItem> ytItems = new ArrayList<>();
 
@@ -108,6 +110,11 @@ final class Library {
     void deleteSong(Song s) {
         removeSong(s);
         save();
+    }
+
+    /** Removes a song without saving (the caller saves). */
+    void deleteSongQuiet(Song s) {
+        removeSong(s);
     }
 
     void deleteSongs(List<Song> list) {
@@ -331,6 +338,8 @@ final class Library {
                 p.ytListId = o.optString("ytListId", null);
                 p.driveFolder = o.optString("driveFolder", null);
                 p.parentId = o.optString("parent", null);
+                p.driveRoot = o.optString("driveRoot", null);
+                p.driveName = o.optString("driveName", null);
                 JSONArray ids = o.optJSONArray("songs");
                 if (ids != null) for (int j = 0; j < ids.length(); j++) p.songIds.add(ids.getString(j));
                 JSONArray yt = o.optJSONArray("yt");
@@ -375,6 +384,8 @@ final class Library {
                 if (p.ytListId != null) o.put("ytListId", p.ytListId);
                 if (p.driveFolder != null) o.put("driveFolder", p.driveFolder);
                 if (p.parentId != null) o.put("parent", p.parentId);
+                if (p.driveRoot != null) o.put("driveRoot", p.driveRoot);
+                if (p.driveName != null) o.put("driveName", p.driveName);
                 JSONArray ids = new JSONArray();
                 for (String id : p.songIds) ids.put(id);
                 o.put("songs", ids);

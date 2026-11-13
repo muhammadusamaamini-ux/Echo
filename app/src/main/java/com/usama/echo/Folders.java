@@ -88,7 +88,7 @@ final class Folders {
             m.getMenu().add(0, 1, 0, "Play all");
             m.getMenu().add(0, 2, 1, "Shuffle all");
         }
-        if (p.driveFolder != null) m.getMenu().add(0, 6, 2, "Get new songs from Drive");
+        if (p.driveFolder != null) m.getMenu().add(0, 6, 2, "Sync with Drive now");
         if (!p.youtube) m.getMenu().add(0, 7, 3, "New folder inside");
         m.getMenu().add(0, 3, 4, "Rename");
         m.getMenu().add(0, 4, 5, "Move to…");
@@ -100,7 +100,7 @@ final class Folders {
                 case 3: rename(a, p, changed); break;
                 case 4: move(a, p, changed); break;
                 case 5: delete(a, p, changed); break;
-                case 6: Drive.load(a, p.driveFolder, p); break;
+                case 6: Drive.syncNow(a, p); break;
                 case 7: newFolder(a, p.id, f -> { changed.run(); open(a, f); }); break;
             }
             return true;
