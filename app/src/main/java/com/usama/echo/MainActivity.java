@@ -44,6 +44,8 @@ public class MainActivity extends Activity {
     private TextView searchHint;
     private MiniPlayer mini;
     private AlertDialog progressDialog;
+    private Selection songSel, searchSel;
+    private static final int A_ADD = 1, A_QUEUE = 2, A_PLAY = 3, A_REMOVE = 4;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -149,13 +151,62 @@ public class MainActivity extends Activity {
 
     // ---------- pages ----------
 
+    private Selection selectionFor(SongAdapter ad) {
+        return new Selection(this, ad, "Add to", A_ADD, new Selection.Actions() {
+            @Override
+            public void fillMenu(android.view.Menu m) {
+                m.add(0, A_PLAY, 0, "Play");
+                m.add(0, A_QUEUE, 1, "Add to queue");
+                m.add(0, A_ADD, 2, "Add to folder…");
+                m.add(0, A_REMOVE, 3, "Remove from Echo");
+            }
+
+            @Override
+            public boolean onAction(int id, List<Library.Song> list) {
+                switch (id) {
+                    case A_PLAY: Hub.play(MainActivity.this, list, 0, false); return true;
+                    case A_QUEUE: Selection.queue(MainActivity.this, list); return true;
+                    case A_ADD:
+                        Selection.addToFolder(MainActivity.this, list, null, false, () -> {
+                            exitSelections();
+                            refresh();
+                        });
+                        return false;
+                    case A_REMOVE:
+                        Selection.removeFromEcho(MainActivity.this, list, () -> {
+                            exitSelections();
+                            refresh();
+                        });
+                        return false;
+                }
+                return false;
+            }
+        });
+    }
+
+    private void exitSelections() {
+        if (songSel != null) songSel.exit();
+        if (searchSel != null) searchSel.exit();
+    }
+
     private View buildSongsPage() {
+        LinearLayout page = Ui.column(this);
         FrameLayout f = new FrameLayout(this);
         ListView list = new ListView(this);
         list.setDivider(null);
         songAdapter = new SongAdapter(this, this::songMenu);
         list.setAdapter(songAdapter);
-        list.setOnItemClickListener((p, v, pos, id) -> Hub.play(this, songAdapter.items(), pos, false));
+        songSel = selectionFor(songAdapter);
+        page.addView(songSel.bar);
+        page.addView(f, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        list.setOnItemClickListener((p, v, pos, id) -> {
+            if (songSel.active()) songSel.toggle(pos);
+            else Hub.play(this, songAdapter.items(), pos, false);
+        });
+        list.setOnItemLongClickListener((p, v, pos, id) -> {
+            songSel.toggle(pos);
+            return true;
+        });
         TextView empty = Ui.text(this, "No songs yet.\n\nTap \"+ Import\" to play music from Google Drive, "
                 + "your phone, or a YouTube playlist.", 16, Ui.SUB, false);
         empty.setGravity(Gravity.CENTER);
@@ -163,7 +214,7 @@ public class MainActivity extends Activity {
         f.addView(list);
         f.addView(empty, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         list.setEmptyView(empty);
-        return f;
+        return page;
     }
 
     private View buildPlaylistsPage() {
@@ -228,7 +279,16 @@ public class MainActivity extends Activity {
         list.setDivider(null);
         searchAdapter = new SongAdapter(this, this::songMenu);
         list.setAdapter(searchAdapter);
-        list.setOnItemClickListener((p, v, pos, id) -> Hub.play(this, searchAdapter.items(), pos, false));
+        searchSel = selectionFor(searchAdapter);
+        page.addView(searchSel.bar, 0);
+        list.setOnItemClickListener((p, v, pos, id) -> {
+            if (searchSel.active()) searchSel.toggle(pos);
+            else Hub.play(this, searchAdapter.items(), pos, false);
+        });
+        list.setOnItemLongClickListener((p, v, pos, id) -> {
+            searchSel.toggle(pos);
+            return true;
+        });
         page.addView(list, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
         searchBox.addTextChangedListener(new TextWatcher() {
@@ -273,6 +333,7 @@ public class MainActivity extends Activity {
     }
 
     private void showTab(int i) {
+        exitSelections();
         tab = i;
         for (int k = 0; k < 3; k++) {
             boolean on = k == i;
@@ -298,7 +359,8 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (tab != 0) showTab(0);
+        if ((songSel != null && songSel.active()) || (searchSel != null && searchSel.active())) exitSelections();
+        else if (tab != 0) showTab(0);
         else super.onBackPressed();
     }
 
@@ -310,7 +372,8 @@ public class MainActivity extends Activity {
         m.getMenu().add(0, 2, 1, "Add to queue");
         m.getMenu().add(0, 3, 2, "Add to folder…");
         m.getMenu().add(0, 4, 3, "Search on Google");
-        m.getMenu().add(0, 5, 4, s.source.equals("file") ? "Delete" : "Remove from Echo");
+        m.getMenu().add(0, 5, 4, "Remove from Echo");
+        if (Selection.isDrive(s)) m.getMenu().add(0, 6, 5, "Open in Google Drive");
         m.setOnMenuItemClickListener(item -> {
             switch (item.getItemId()) {
                 case 1: Hub.playNext(this, s); toast("Plays next"); break;
@@ -318,7 +381,8 @@ public class MainActivity extends Activity {
                 case 3: addToPlaylist(s); break;
                 case 4: startActivityForResult(WebActivity.google(this,
                         s.title + (s.artist == null || s.artist.isEmpty() ? " song" : " " + s.artist)), REQ_WEB); break;
-                case 5: confirmDelete(s); break;
+                case 5: Selection.removeFromEcho(this, java.util.Collections.singletonList(s), this::refresh); break;
+                case 6: Selection.openInDrive(this, s); break;
             }
             return true;
         });

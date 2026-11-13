@@ -25,6 +25,8 @@ public class PlaylistActivity extends Activity {
     private MiniPlayer mini;
     private TextView titleView, countView, pathView, empty;
     private String lastId;
+    private Selection selection;
+    private static final int A_MOVE = 1, A_COPY = 2, A_QUEUE = 3, A_PLAY = 4, A_REMOVE_HERE = 5, A_REMOVE_ECHO = 6;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -66,6 +68,53 @@ public class PlaylistActivity extends Activity {
         root.addView(head);
 
         songs = new SongAdapter(this, this::songMenu);
+        songs.registerDataSetObserver(new android.database.DataSetObserver() {
+            @Override
+            public void onChanged() {
+                if (adapter != null) adapter.notifyDataSetChanged();
+            }
+        });
+        selection = new Selection(this, songs, "Move", A_MOVE, new Selection.Actions() {
+            @Override
+            public void fillMenu(android.view.Menu m) {
+                m.add(0, A_PLAY, 0, "Play");
+                m.add(0, A_QUEUE, 1, "Add to queue");
+                m.add(0, A_MOVE, 2, "Move to folder…");
+                m.add(0, A_COPY, 3, "Copy to folder…");
+                m.add(0, A_REMOVE_HERE, 4, "Remove from this folder");
+                m.add(0, A_REMOVE_ECHO, 5, "Remove from Echo");
+            }
+
+            @Override
+            public boolean onAction(int id, List<Library.Song> list) {
+                switch (id) {
+                    case A_PLAY: Hub.play(PlaylistActivity.this, list, 0, false); return true;
+                    case A_QUEUE: Selection.queue(PlaylistActivity.this, list); return true;
+                    case A_MOVE:
+                    case A_COPY:
+                        Selection.addToFolder(PlaylistActivity.this, list, pl, id == A_MOVE, () -> {
+                            selection.exit();
+                            refresh();
+                        });
+                        return false;
+                    case A_REMOVE_HERE:
+                        for (Library.Song s : list) pl.songIds.remove(s.id);
+                        Library.get(PlaylistActivity.this).save();
+                        Toast.makeText(PlaylistActivity.this, list.size() + " removed from this folder",
+                                Toast.LENGTH_SHORT).show();
+                        refresh();
+                        return true;
+                    case A_REMOVE_ECHO:
+                        Selection.removeFromEcho(PlaylistActivity.this, list, () -> {
+                            selection.exit();
+                            refresh();
+                        });
+                        return false;
+                }
+                return false;
+            }
+        });
+        root.addView(selection.bar);
         adapter = new BaseAdapter() {
             @Override public int getCount() { return folders.size() + songs.getCount(); }
             @Override public Object getItem(int i) { return i < folders.size() ? folders.get(i) : songs.getItem(i - folders.size()); }
@@ -83,8 +132,21 @@ public class PlaylistActivity extends Activity {
         list.setDivider(null);
         list.setAdapter(adapter);
         list.setOnItemClickListener((p, v, pos, id) -> {
-            if (pos < folders.size()) Folders.open(this, folders.get(pos));
-            else Hub.play(this, songs.items(), pos - folders.size(), false);
+            if (pos < folders.size()) {
+                if (!selection.active()) Folders.open(this, folders.get(pos));
+            } else if (selection.active()) {
+                selection.toggle(pos - folders.size());
+            } else {
+                Hub.play(this, songs.items(), pos - folders.size(), false);
+            }
+        });
+        list.setOnItemLongClickListener((p, v, pos, id) -> {
+            if (pos < folders.size()) {
+                Folders.menu(this, v, folders.get(pos), this::refresh);
+                return true;
+            }
+            selection.toggle(pos - folders.size());
+            return true;
         });
         empty = Ui.text(this, "This folder is empty. Tap \"+ Add\" to add songs or a folder.", 15, Ui.SUB, false);
         empty.setPadding(Ui.dp(this, 20), Ui.dp(this, 20), Ui.dp(this, 20), 0);
@@ -185,6 +247,8 @@ public class PlaylistActivity extends Activity {
         m.getMenu().add(0, 3, 4, "Move up");
         m.getMenu().add(0, 4, 5, "Move down");
         m.getMenu().add(0, 5, 6, "Remove from this folder");
+        m.getMenu().add(0, 8, 7, "Remove from Echo");
+        if (Selection.isDrive(s)) m.getMenu().add(0, 9, 8, "Open in Google Drive");
         m.setOnMenuItemClickListener(item -> {
             Library lib = Library.get(this);
             int i = pl.songIds.indexOf(s.id);
@@ -194,6 +258,8 @@ public class PlaylistActivity extends Activity {
                 case 3: if (i > 0) { pl.songIds.remove(i); pl.songIds.add(i - 1, s.id); lib.save(); } break;
                 case 4: if (i >= 0 && i < pl.songIds.size() - 1) { pl.songIds.remove(i); pl.songIds.add(i + 1, s.id); lib.save(); } break;
                 case 5: pl.songIds.remove(s.id); lib.save(); break;
+                case 8: Selection.removeFromEcho(this, java.util.Collections.singletonList(s), this::refresh); break;
+                case 9: Selection.openInDrive(this, s); break;
                 case 6:
                 case 7:
                     final boolean move = item.getItemId() == 6;
@@ -248,6 +314,12 @@ public class PlaylistActivity extends Activity {
 
     static void rename(Activity a, Library.Playlist pl, Runnable after) {
         Folders.rename(a, pl, after);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (selection != null && selection.active()) selection.exit();
+        else super.onBackPressed();
     }
 
     @Override

@@ -106,6 +106,16 @@ final class Library {
     }
 
     void deleteSong(Song s) {
+        removeSong(s);
+        save();
+    }
+
+    void deleteSongs(List<Song> list) {
+        for (Song s : list) removeSong(s);
+        save();
+    }
+
+    private void removeSong(Song s) {
         songs.remove(s);
         byId.remove(s.id);
         for (Playlist p : playlists) p.songIds.remove(s.id);
@@ -116,7 +126,6 @@ final class Library {
             } catch (Exception ignored) {
             }
         }
-        save();
     }
 
     List<Song> sortedSongs() {
