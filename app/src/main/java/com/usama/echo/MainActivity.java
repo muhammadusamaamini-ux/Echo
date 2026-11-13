@@ -67,7 +67,7 @@ public class MainActivity extends Activity {
         // Tabs
         LinearLayout tabRow = Ui.row(this);
         tabRow.setPadding(Ui.dp(this, 14), Ui.dp(this, 6), Ui.dp(this, 14), Ui.dp(this, 8));
-        String[] labels = {"Songs", "Playlists", "Search"};
+        String[] labels = {"Playlists", "Songs", "Search"};
         for (int i = 0; i < 3; i++) {
             TextView t = Ui.text(this, labels[i], 14, Ui.TEXT, true);
             t.setPadding(Ui.dp(this, 16), Ui.dp(this, 7), Ui.dp(this, 16), Ui.dp(this, 7));
@@ -82,8 +82,8 @@ public class MainActivity extends Activity {
         root.addView(tabRow);
 
         FrameLayout content = new FrameLayout(this);
-        pages[0] = buildSongsPage();
-        pages[1] = buildPlaylistsPage();
+        pages[0] = buildPlaylistsPage();
+        pages[1] = buildSongsPage();
         pages[2] = buildSearchPage();
         for (View p : pages) content.addView(p, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -176,36 +176,13 @@ public class MainActivity extends Activity {
 
             @Override
             public View getView(int i, View convert, ViewGroup parent) {
-                LinearLayout row = Ui.row(MainActivity.this);
-                row.setPadding(Ui.dp(MainActivity.this, 16), Ui.dp(MainActivity.this, 8),
-                        Ui.dp(MainActivity.this, 4), Ui.dp(MainActivity.this, 8));
-                if (i == 0) {
-                    TextView plus = Ui.tile(MainActivity.this, "+", 52, Ui.SURFACE2);
-                    plus.setText("+");
-                    row.addView(plus);
-                    TextView t = Ui.line(MainActivity.this, "New playlist", 16, Ui.TEXT, true);
-                    t.setPadding(Ui.dp(MainActivity.this, 14), 0, 0, 0);
-                    row.addView(t, Ui.weight());
-                    row.setMinimumHeight(Ui.dp(MainActivity.this, 68));
-                    return row;
-                }
-                final Library.Playlist p = playlists.get(i - 1);
-                row.addView(Ui.tile(MainActivity.this, p.youtube ? "▶" : p.name, 52,
-                        p.youtube ? Ui.YT : Ui.colorFor(p.name)));
-                LinearLayout col = Ui.column(MainActivity.this);
-                col.setPadding(Ui.dp(MainActivity.this, 14), 0, Ui.dp(MainActivity.this, 4), 0);
-                col.addView(Ui.line(MainActivity.this, p.name, 16, Ui.TEXT, false));
-                col.addView(Ui.line(MainActivity.this, p.subtitle(), 13, Ui.SUB, false));
-                row.addView(col, Ui.weight());
-                ImageButton more = Ui.icon(MainActivity.this, R.drawable.ic_more, 40, Ui.SUB);
-                more.setOnClickListener(v -> playlistMenu(v, p));
-                row.addView(more);
-                return row;
+                if (i == 0) return Folders.addRow(MainActivity.this, "New folder");
+                return Folders.row(MainActivity.this, playlists.get(i - 1), MainActivity.this::refresh);
             }
         };
         list.setAdapter(listAdapter);
         list.setOnItemClickListener((parent, v, pos, id) -> {
-            if (pos == 0) newPlaylist(null);
+            if (pos == 0) Folders.newFolder(this, null, f -> { refresh(); openPlaylist(f); });
             else openPlaylist(playlists.get(pos - 1));
         });
         return list;
@@ -308,7 +285,7 @@ public class MainActivity extends Activity {
     void refresh() {
         Library lib = Library.get(this);
         songAdapter.setItems(lib.sortedSongs());
-        playlists = new ArrayList<>(lib.playlists);
+        playlists = lib.children(null);
         listAdapter.notifyDataSetChanged();
         if (searchBox != null) runSearch();
     }
@@ -331,7 +308,7 @@ public class MainActivity extends Activity {
         PopupMenu m = new PopupMenu(this, anchor);
         m.getMenu().add(0, 1, 0, "Play next");
         m.getMenu().add(0, 2, 1, "Add to queue");
-        m.getMenu().add(0, 3, 2, "Add to playlist…");
+        m.getMenu().add(0, 3, 2, "Add to folder…");
         m.getMenu().add(0, 4, 3, "Search on Google");
         m.getMenu().add(0, 5, 4, s.source.equals("file") ? "Delete" : "Remove from Echo");
         m.setOnMenuItemClickListener(item -> {
@@ -364,9 +341,9 @@ public class MainActivity extends Activity {
     private void addToPlaylist(Library.Song s) {
         final List<Library.Playlist> local = Library.get(this).localPlaylists();
         String[] names = new String[local.size() + 1];
-        names[0] = "+ New playlist";
-        for (int i = 0; i < local.size(); i++) names[i + 1] = local.get(i).name;
-        new AlertDialog.Builder(this).setTitle("Add to playlist")
+        names[0] = "+ New folder";
+        for (int i = 0; i < local.size(); i++) names[i + 1] = Library.get(this).path(local.get(i));
+        new AlertDialog.Builder(this).setTitle("Add to folder")
                 .setItems(names, (d, which) -> {
                     if (which == 0) {
                         newPlaylist(s);
@@ -381,7 +358,7 @@ public class MainActivity extends Activity {
     }
 
     private void newPlaylist(Library.Song first) {
-        askName("New playlist", "My playlist", n -> {
+        askName("New folder", "My playlist", n -> {
             Library.Playlist p = Library.get(this).newPlaylist(n);
             if (first != null) {
                 p.songIds.add(first.id);
@@ -414,35 +391,6 @@ public class MainActivity extends Activity {
                     cb.onName(n.isEmpty() ? def : n);
                 }).show();
         e.requestFocus();
-    }
-
-    private void playlistMenu(View anchor, Library.Playlist p) {
-        PopupMenu m = new PopupMenu(this, anchor);
-        if (!p.youtube) {
-            m.getMenu().add(0, 1, 0, "Play");
-            m.getMenu().add(0, 2, 1, "Shuffle");
-        }
-        m.getMenu().add(0, 3, 2, "Rename");
-        m.getMenu().add(0, 4, 3, "Delete");
-        m.setOnMenuItemClickListener(item -> {
-            Library lib = Library.get(this);
-            switch (item.getItemId()) {
-                case 1: Hub.play(this, lib.songsOf(p), 0, false); break;
-                case 2: Hub.play(this, lib.songsOf(p), 0, true); break;
-                case 3: PlaylistActivity.rename(this, p, this::refresh); break;
-                case 4:
-                    new AlertDialog.Builder(this).setMessage("Delete \"" + p.name + "\"? Songs stay in your library.")
-                            .setNegativeButton("Cancel", null)
-                            .setPositiveButton("Delete", (d, w) -> {
-                                lib.playlists.remove(p);
-                                lib.save();
-                                refresh();
-                            }).show();
-                    break;
-            }
-            return true;
-        });
-        m.show();
     }
 
     private void openPlaylist(Library.Playlist p) {

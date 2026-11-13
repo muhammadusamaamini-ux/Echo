@@ -43,12 +43,20 @@ final class Library {
         boolean youtube;
         String ytListId;
         String driveFolder; // set for playlists that play from a Google Drive folder
+        String parentId;    // the folder this one is inside; null = top level
         final List<String> songIds = new ArrayList<>();
         final List<YtItem> ytItems = new ArrayList<>();
 
         String subtitle() {
+            return subtitle(0);
+        }
+
+        String subtitle(int subFolders) {
             if (youtube) return "YouTube  ·  " + ytItems.size() + (ytItems.size() == 1 ? " video" : " videos");
-            return songIds.size() + (songIds.size() == 1 ? " song" : " songs");
+            String songs = songIds.size() + (songIds.size() == 1 ? " song" : " songs");
+            if (subFolders == 0) return songs;
+            String f = subFolders + (subFolders == 1 ? " folder" : " folders");
+            return songIds.isEmpty() ? f : f + "  ·  " + songs;
         }
     }
 
@@ -132,9 +140,14 @@ final class Library {
     // ---------- playlists ----------
 
     Playlist newPlaylist(String name) {
+        return newPlaylist(name, null);
+    }
+
+    Playlist newPlaylist(String name, String parentId) {
         Playlist p = new Playlist();
         p.id = newId();
         p.name = name;
+        p.parentId = parentId;
         playlists.add(p);
         save();
         return p;
@@ -150,10 +163,78 @@ final class Library {
         return null;
     }
 
+    /** Folders that can hold songs and other folders, sorted by their full path. */
     List<Playlist> localPlaylists() {
         List<Playlist> out = new ArrayList<>();
         for (Playlist p : playlists) if (!p.youtube) out.add(p);
+        Collections.sort(out, (a, b) -> path(a).compareToIgnoreCase(path(b)));
         return out;
+    }
+
+    /** The folders and playlists directly inside a folder (null = top level), A to Z. */
+    List<Playlist> children(String parentId) {
+        List<Playlist> out = new ArrayList<>();
+        for (Playlist p : playlists) {
+            String par = p.parentId != null && playlist(p.parentId) == null ? null : p.parentId; // parent deleted
+            if (parentId == null ? par == null : parentId.equals(par)) out.add(p);
+        }
+        Collections.sort(out, (a, b) -> safe(a.name).compareToIgnoreCase(safe(b.name)));
+        return out;
+    }
+
+    /** "Music › Pashto › Old" */
+    String path(Playlist p) {
+        StringBuilder sb = new StringBuilder(safe(p.name));
+        Playlist cur = playlist(p.parentId);
+        int guard = 0;
+        while (cur != null && guard++ < 50) {
+            sb.insert(0, safe(cur.name) + " › ");
+            cur = playlist(cur.parentId);
+        }
+        return sb.toString();
+    }
+
+    /** True if "inner" is "outer" itself or somewhere inside it. */
+    boolean isInside(Playlist inner, Playlist outer) {
+        Playlist cur = inner;
+        int guard = 0;
+        while (cur != null && guard++ < 50) {
+            if (cur.id.equals(outer.id)) return true;
+            cur = playlist(cur.parentId);
+        }
+        return false;
+    }
+
+    /** Where a folder may be moved to: any folder except itself, its sub-folders and YouTube playlists. */
+    List<Playlist> moveTargets(Playlist p) {
+        List<Playlist> out = new ArrayList<>();
+        for (Playlist t : localPlaylists()) if (!isInside(t, p)) out.add(t);
+        return out;
+    }
+
+    /** Deletes a folder and everything inside it (songs stay in the library). */
+    void deleteTree(Playlist p) {
+        for (Playlist c : children(p.id)) deleteTree(c);
+        playlists.remove(p);
+    }
+
+    int countTree(Playlist p) {
+        int n = 0;
+        for (Playlist c : children(p.id)) n += 1 + countTree(c);
+        return n;
+    }
+
+    /** Every song in a folder and its sub-folders, in order. */
+    List<Song> allSongsIn(Playlist p) {
+        List<Song> out = new ArrayList<>();
+        collect(p, out, new java.util.HashSet<>(), 0);
+        return out;
+    }
+
+    private void collect(Playlist p, List<Song> out, java.util.Set<String> seen, int depth) {
+        if (depth > 50) return;
+        for (Song s : songsOf(p)) if (seen.add(s.id)) out.add(s);
+        for (Playlist c : children(p.id)) collect(c, out, seen, depth + 1);
     }
 
     List<Song> songsOf(Playlist p) {
@@ -240,6 +321,7 @@ final class Library {
                 p.youtube = o.optBoolean("youtube", false);
                 p.ytListId = o.optString("ytListId", null);
                 p.driveFolder = o.optString("driveFolder", null);
+                p.parentId = o.optString("parent", null);
                 JSONArray ids = o.optJSONArray("songs");
                 if (ids != null) for (int j = 0; j < ids.length(); j++) p.songIds.add(ids.getString(j));
                 JSONArray yt = o.optJSONArray("yt");
@@ -283,6 +365,7 @@ final class Library {
                 o.put("youtube", p.youtube);
                 if (p.ytListId != null) o.put("ytListId", p.ytListId);
                 if (p.driveFolder != null) o.put("driveFolder", p.driveFolder);
+                if (p.parentId != null) o.put("parent", p.parentId);
                 JSONArray ids = new JSONArray();
                 for (String id : p.songIds) ids.put(id);
                 o.put("songs", ids);

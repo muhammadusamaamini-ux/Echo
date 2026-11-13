@@ -3,9 +3,9 @@ package com.usama.echo;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.os.Bundle;
-import android.text.InputType;
 import android.view.View;
-import android.widget.EditText;
+import android.view.ViewGroup;
+import android.widget.BaseAdapter;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -13,14 +13,18 @@ import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
 import java.util.List;
 
-/** One of your own playlists. */
+/** One folder or playlist: its sub-folders first, then its songs. */
 public class PlaylistActivity extends Activity {
     private Library.Playlist pl;
-    private SongAdapter adapter;
+    private SongAdapter songs;
+    private BaseAdapter adapter;
+    private List<Library.Playlist> folders = new ArrayList<>();
     private MiniPlayer mini;
-    private TextView titleView, countView;
+    private TextView titleView, countView, pathView, empty;
+    private String lastId;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -40,37 +44,61 @@ public class PlaylistActivity extends Activity {
         root.addView(bar);
 
         LinearLayout head = Ui.column(this);
-        head.setPadding(Ui.dp(this, 20), Ui.dp(this, 4), Ui.dp(this, 20), Ui.dp(this, 12));
+        head.setPadding(Ui.dp(this, 20), 0, Ui.dp(this, 20), Ui.dp(this, 12));
+        pathView = Ui.line(this, "", 12, Ui.DIM, false);
         titleView = Ui.text(this, pl.name, 26, Ui.TEXT, true);
         countView = Ui.text(this, "", 14, Ui.SUB, false);
+        head.addView(pathView);
         head.addView(titleView);
         head.addView(countView);
         LinearLayout buttons = Ui.row(this);
         buttons.setPadding(0, Ui.dp(this, 14), 0, 0);
         TextView play = Ui.pill(this, "▶  Play", true);
-        play.setOnClickListener(v -> Hub.play(this, adapter.items(), 0, false));
+        play.setOnClickListener(v -> playAll(false));
         TextView shuffle = Ui.pill(this, "Shuffle", false);
-        shuffle.setOnClickListener(v -> Hub.play(this, adapter.items(), 0, true));
-        TextView add = Ui.pill(this, "+ Add songs", false);
-        add.setOnClickListener(v -> addSongs());
+        shuffle.setOnClickListener(v -> playAll(true));
+        TextView add = Ui.pill(this, "+ Add", false);
+        add.setOnClickListener(this::addMenu);
         buttons.addView(play);
         buttons.addView(shuffle, margin());
         buttons.addView(add, margin());
         head.addView(buttons);
         root.addView(head);
 
+        songs = new SongAdapter(this, this::songMenu);
+        adapter = new BaseAdapter() {
+            @Override public int getCount() { return folders.size() + songs.getCount(); }
+            @Override public Object getItem(int i) { return i < folders.size() ? folders.get(i) : songs.getItem(i - folders.size()); }
+            @Override public long getItemId(int i) { return i; }
+            @Override public int getViewTypeCount() { return 2; }
+            @Override public int getItemViewType(int i) { return i < folders.size() ? 0 : 1; }
+
+            @Override
+            public View getView(int i, View convert, ViewGroup parent) {
+                if (i < folders.size()) return Folders.row(PlaylistActivity.this, folders.get(i), PlaylistActivity.this::refresh);
+                return songs.getView(i - folders.size(), convert, parent);
+            }
+        };
         ListView list = new ListView(this);
         list.setDivider(null);
-        adapter = new SongAdapter(this, this::songMenu);
         list.setAdapter(adapter);
-        list.setOnItemClickListener((p, v, pos, id) -> Hub.play(this, adapter.items(), pos, false));
-        TextView empty = Ui.text(this, "No songs yet. Tap \"+ Add songs\".", 15, Ui.SUB, false);
+        list.setOnItemClickListener((p, v, pos, id) -> {
+            if (pos < folders.size()) Folders.open(this, folders.get(pos));
+            else Hub.play(this, songs.items(), pos - folders.size(), false);
+        });
+        empty = Ui.text(this, "This folder is empty. Tap \"+ Add\" to add songs or a folder.", 15, Ui.SUB, false);
         empty.setPadding(Ui.dp(this, 20), Ui.dp(this, 20), Ui.dp(this, 20), 0);
         root.addView(empty);
         list.setEmptyView(empty);
         root.addView(list, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        mini = new MiniPlayer(this, () -> adapter.setCurrent(mini == null ? null : mini.currentId()));
+        mini = new MiniPlayer(this, () -> {
+            String id = mini == null ? null : mini.currentId();
+            if (id == null ? lastId == null : id.equals(lastId)) return;
+            lastId = id;
+            songs.setCurrent(id);
+            if (adapter != null) adapter.notifyDataSetChanged();
+        });
         root.addView(mini.view);
         setContentView(root);
         refresh();
@@ -88,10 +116,18 @@ public class PlaylistActivity extends Activity {
     }
 
     private void refresh() {
-        List<Library.Song> songs = Library.get(this).songsOf(pl);
-        adapter.setItems(songs);
+        Library lib = Library.get(this);
+        if (lib.playlist(pl.id) == null) { // deleted
+            finish();
+            return;
+        }
+        folders = lib.children(pl.id);
+        songs.setItems(lib.songsOf(pl));
+        adapter.notifyDataSetChanged();
         titleView.setText(pl.name);
-        countView.setText(pl.subtitle());
+        countView.setText(pl.subtitle(folders.size()) + (pl.driveFolder != null ? "  ·  Google Drive" : ""));
+        Library.Playlist parent = lib.playlist(pl.parentId);
+        pathView.setText(parent == null ? "Playlists" : "Playlists › " + lib.path(parent));
     }
 
     @Override
@@ -100,13 +136,55 @@ public class PlaylistActivity extends Activity {
         if (adapter != null) refresh();
     }
 
+    private void playAll(boolean shuffle) {
+        List<Library.Song> all = Library.get(this).allSongsIn(pl);
+        if (all.isEmpty()) {
+            Toast.makeText(this, "No songs in this folder yet", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Hub.play(this, all, 0, shuffle);
+    }
+
+    private void addMenu(View anchor) {
+        PopupMenu m = new PopupMenu(this, anchor);
+        m.getMenu().add(0, 1, 0, "New folder here");
+        m.getMenu().add(0, 2, 1, "Add songs");
+        m.getMenu().add(0, 3, 2, "Move a folder here");
+        m.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == 1) Folders.newFolder(this, pl.id, f -> refresh());
+            else if (item.getItemId() == 2) addSongs();
+            else moveHere();
+            return true;
+        });
+        m.show();
+    }
+
+    /** Pick any other folder and move it into this one. */
+    private void moveHere() {
+        Library lib = Library.get(this);
+        List<Library.Playlist> candidates = new ArrayList<>();
+        for (Library.Playlist p : lib.playlists) {
+            if (p.id.equals(pl.id) || pl.id.equals(p.parentId)) continue;
+            if (lib.isInside(pl, p)) continue; // can't move a folder into its own sub-folder
+            candidates.add(p);
+        }
+        java.util.Collections.sort(candidates, (x, y) -> lib.path(x).compareToIgnoreCase(lib.path(y)));
+        Folders.pick(this, "Move into \"" + pl.name + "\"", candidates, false, target -> {
+            target.parentId = pl.id;
+            lib.save();
+            refresh();
+        });
+    }
+
     private void songMenu(View anchor, Library.Song s, int pos) {
         PopupMenu m = new PopupMenu(this, anchor);
         m.getMenu().add(0, 1, 0, "Play next");
         m.getMenu().add(0, 2, 1, "Add to queue");
-        m.getMenu().add(0, 3, 2, "Move up");
-        m.getMenu().add(0, 4, 3, "Move down");
-        m.getMenu().add(0, 5, 4, "Remove from this playlist");
+        m.getMenu().add(0, 6, 2, "Move to folder…");
+        m.getMenu().add(0, 7, 3, "Copy to folder…");
+        m.getMenu().add(0, 3, 4, "Move up");
+        m.getMenu().add(0, 4, 5, "Move down");
+        m.getMenu().add(0, 5, 6, "Remove from this folder");
         m.setOnMenuItemClickListener(item -> {
             Library lib = Library.get(this);
             int i = pl.songIds.indexOf(s.id);
@@ -116,6 +194,19 @@ public class PlaylistActivity extends Activity {
                 case 3: if (i > 0) { pl.songIds.remove(i); pl.songIds.add(i - 1, s.id); lib.save(); } break;
                 case 4: if (i >= 0 && i < pl.songIds.size() - 1) { pl.songIds.remove(i); pl.songIds.add(i + 1, s.id); lib.save(); } break;
                 case 5: pl.songIds.remove(s.id); lib.save(); break;
+                case 6:
+                case 7:
+                    final boolean move = item.getItemId() == 6;
+                    List<Library.Playlist> targets = lib.localPlaylists();
+                    targets.remove(pl);
+                    Folders.pick(this, (move ? "Move" : "Copy") + " \"" + s.title + "\" to", targets, false, target -> {
+                        if (!target.songIds.contains(s.id)) target.songIds.add(s.id);
+                        if (move) pl.songIds.remove(s.id);
+                        lib.save();
+                        refresh();
+                        Toast.makeText(this, (move ? "Moved to " : "Copied to ") + target.name, Toast.LENGTH_SHORT).show();
+                    });
+                    break;
             }
             refresh();
             return true;
@@ -152,47 +243,11 @@ public class PlaylistActivity extends Activity {
     }
 
     private void showMenu(View anchor) {
-        PopupMenu m = new PopupMenu(this, anchor);
-        if (pl.driveFolder != null) m.getMenu().add(0, 3, 0, "Get new songs from Drive");
-        m.getMenu().add(0, 1, 1, "Rename");
-        m.getMenu().add(0, 2, 2, "Delete playlist");
-        m.setOnMenuItemClickListener(item -> {
-            if (item.getItemId() == 3) {
-                Drive.load(this, pl.driveFolder, pl);
-            } else if (item.getItemId() == 1) {
-                rename(this, pl, this::refresh);
-            } else {
-                new AlertDialog.Builder(this).setMessage("Delete \"" + pl.name + "\"? The songs stay in your library.")
-                        .setNegativeButton("Cancel", null)
-                        .setPositiveButton("Delete", (d, w) -> {
-                            Library lib = Library.get(this);
-                            lib.playlists.remove(pl);
-                            lib.save();
-                            finish();
-                        }).show();
-            }
-            return true;
-        });
-        m.show();
+        Folders.menu(this, anchor, pl, this::refresh);
     }
 
     static void rename(Activity a, Library.Playlist pl, Runnable after) {
-        final EditText e = new EditText(a);
-        e.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        e.setText(pl.name);
-        e.setSelectAllOnFocus(true);
-        LinearLayout box = Ui.column(a);
-        box.setPadding(Ui.dp(a, 20), Ui.dp(a, 8), Ui.dp(a, 20), 0);
-        box.addView(e);
-        new AlertDialog.Builder(a).setTitle("Rename playlist").setView(box)
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Save", (d, w) -> {
-                    String n = e.getText().toString().trim();
-                    if (n.isEmpty()) return;
-                    pl.name = n;
-                    Library.get(a).save();
-                    after.run();
-                }).show();
+        Folders.rename(a, pl, after);
     }
 
     @Override

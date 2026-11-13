@@ -50,22 +50,31 @@ final class Drive {
         return "https://drive.usercontent.google.com/download?id=" + fileId + "&export=download&confirm=t";
     }
 
-    static final class Folder {
-        String name;
+    /** One Drive folder: its songs and its sub-folders. */
+    static final class Node {
+        String id, name;
         final List<Library.Song> songs = new ArrayList<>();
+        final List<Node> children = new ArrayList<>();
+    }
+
+    static final class Folder {
+        Node root;
+        int songCount;
         String error;
     }
 
     // ---------- reading a shared folder ----------
 
-    /** Lists the songs in a shared folder and its sub-folders. Call from a background thread. */
+    /** Reads a shared folder with all its sub-folders. Call from a background thread. */
     static Folder read(String folderId) {
         Folder f = new Folder();
         try {
-            readInto(folderId, f, 0, new HashSet<>());
-            if (f.songs.isEmpty() && f.error == null) {
-                f.error = "No songs were found in this folder. Make sure it contains audio files (MP3, M4A…) "
-                        + "and is shared as \"Anyone with the link\".";
+            f.root = readNode(folderId, null, 0, new HashSet<>(), f);
+            if (f.root == null) {
+                f.error = "This folder isn't shared. In Google Drive, share it as \"Anyone with the link\" and try again.";
+            } else if (f.songCount == 0) {
+                f.error = "No songs were found in this folder or its sub-folders. Make sure it contains audio files "
+                        + "(MP3, M4A…) and is shared as \"Anyone with the link\".";
             }
         } catch (Exception e) {
             f.error = "Couldn't open the folder. Check your internet, and that the folder is shared as "
@@ -74,18 +83,19 @@ final class Drive {
         return f;
     }
 
-    private static void readInto(String folderId, Folder f, int depth, Set<String> seen) throws Exception {
-        if (depth > 3 || !seen.add(folderId)) return;
+    private static Node readNode(String folderId, String name, int depth, Set<String> seen, Folder f) throws Exception {
+        if (depth > 8 || !seen.add(folderId)) return null;
         String html = get("https://drive.google.com/embeddedfolderview?id=" + folderId);
-        if (html == null) {
-            if (depth == 0) f.error = "This folder isn't shared. In Google Drive, share it as \"Anyone with the link\" and try again.";
-            return;
-        }
-        if (depth == 0) {
+        if (html == null) return null;
+        Node n = new Node();
+        n.id = folderId;
+        n.name = name;
+        if (n.name == null) {
             Matcher t = PAGE_TITLE.matcher(html);
-            if (t.find()) f.name = unescape(t.group(1)).replace(" - Google Drive", "").trim();
+            if (t.find()) n.name = unescape(t.group(1)).replace(" - Google Drive", "").trim();
+            if (n.name == null || n.name.isEmpty()) n.name = "Google Drive";
         }
-        List<String> subFolders = new ArrayList<>();
+        List<String[]> subFolders = new ArrayList<>();
         String[] parts = html.split("class=\"flip-entry\"");
         for (int i = 1; i < parts.length; i++) {
             String p = parts[i];
@@ -94,17 +104,21 @@ final class Drive {
             Matcher href = HREF.matcher(p);
             if (!id.find() || !title.find()) continue;
             String fileId = id.group(1);
-            String name = unescape(title.group(1)).trim();
+            String entryName = unescape(title.group(1)).trim();
             String link = href.find() ? href.group(1) : "";
             if (link.contains("/folders/")) {
-                subFolders.add(fileId);
+                subFolders.add(new String[]{fileId, entryName});
                 continue;
             }
-            String ext = ext(name);
-            if (!AUDIO.contains(ext)) continue;
-            f.songs.add(song(fileId, name, f.name));
+            if (!AUDIO.contains(ext(entryName))) continue;
+            n.songs.add(song(fileId, entryName, n.name));
+            f.songCount++;
         }
-        for (String sub : subFolders) readInto(sub, f, depth + 1, seen);
+        for (String[] sub : subFolders) {
+            Node c = readNode(sub[0], sub[1], depth + 1, seen, f);
+            if (c != null && (!c.songs.isEmpty() || !c.children.isEmpty())) n.children.add(c);
+        }
+        return n;
     }
 
     private static Library.Song song(String fileId, String fileName, String folderName) {
@@ -212,36 +226,56 @@ final class Drive {
                     return;
                 }
                 Library lib = Library.get(a);
-                Library.Playlist pl = existing;
-                if (pl == null) {
-                    pl = lib.playlistForDrive(folderId);
-                }
-                int before = 0;
-                if (pl == null) {
-                    pl = new Library.Playlist();
-                    pl.id = Library.newId();
-                    pl.name = f.name == null || f.name.isEmpty() ? "Google Drive" : f.name;
-                    pl.driveFolder = folderId;
-                    lib.playlists.add(pl);
-                } else {
-                    before = pl.songIds.size();
-                }
-                for (Library.Song s : f.songs) {
-                    Library.Song old = lib.song(s.id);
-                    if (old == null) lib.addSong(s);
-                    if (!pl.songIds.contains(s.id)) pl.songIds.add(s.id);
-                }
+                int songsBefore = lib.songs.size();
+                int foldersBefore = lib.playlists.size();
+                Set<String> all = new HashSet<>();
+                collectIds(f.root, all);
+                Library.Playlist rootPl = sync(lib, f.root, existing != null ? existing.parentId : null, existing, all);
                 lib.save();
                 if (a instanceof MainActivity) ((MainActivity) a).refresh();
-                int added = pl.songIds.size() - before;
+                int newSongs = lib.songs.size() - songsBefore;
+                int newFolders = lib.playlists.size() - foldersBefore;
                 if (existing != null) {
-                    android.widget.Toast.makeText(a, added == 0 ? "No new songs in the folder"
-                            : added + " new songs added", android.widget.Toast.LENGTH_SHORT).show();
+                    String m = newSongs == 0 && newFolders == 0 ? "Everything is up to date"
+                            : newSongs + " new songs" + (newFolders > 0 ? ", " + newFolders + " new folders" : "");
+                    android.widget.Toast.makeText(a, m, android.widget.Toast.LENGTH_SHORT).show();
                     if (a instanceof PlaylistActivity) ((PlaylistActivity) a).reload();
                 } else {
-                    a.startActivity(new Intent(a, PlaylistActivity.class).putExtra("id", pl.id));
+                    a.startActivity(new Intent(a, PlaylistActivity.class).putExtra("id", rootPl.id));
                 }
             });
         }).start();
+    }
+
+    private static void collectIds(Node n, Set<String> out) {
+        for (Library.Song s : n.songs) out.add(s.id);
+        for (Node c : n.children) collectIds(c, out);
+    }
+
+    /**
+     * Makes the folder (and its sub-folders) match Drive. Folders you moved somewhere else in Echo stay where
+     * you put them; only folders that are new in Drive are created, inside their Drive parent.
+     */
+    private static Library.Playlist sync(Library lib, Node n, String parentId, Library.Playlist forced, Set<String> all) {
+        Library.Playlist pl = forced != null ? forced : lib.playlistForDrive(n.id);
+        if (pl == null) {
+            pl = new Library.Playlist();
+            pl.id = Library.newId();
+            pl.name = n.name;
+            pl.driveFolder = n.id;
+            pl.parentId = parentId;
+            lib.playlists.add(pl);
+        }
+        if (pl.driveFolder == null) pl.driveFolder = n.id;
+        Set<String> here = new HashSet<>();
+        for (Library.Song s : n.songs) {
+            here.add(s.id);
+            if (!lib.has(s.id)) lib.addSong(s);
+            if (!pl.songIds.contains(s.id)) pl.songIds.add(s.id);
+        }
+        // Drive songs that now live in a sub-folder are shown there, not here.
+        pl.songIds.removeIf(id -> all.contains(id) && !here.contains(id));
+        for (Node c : n.children) sync(lib, c, pl.id, null, all);
+        return pl;
     }
 }

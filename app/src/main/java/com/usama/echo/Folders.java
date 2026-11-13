@@ -1,0 +1,187 @@
+package com.usama.echo;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Intent;
+import android.text.InputType;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.PopupMenu;
+import android.widget.Toast;
+
+import java.util.List;
+
+/** Shared actions for folders and playlists: create, open, rename, move, delete. */
+final class Folders {
+    private Folders() {}
+
+    interface NameCallback {
+        void onName(String name);
+    }
+
+    interface PickCallback {
+        /** target is null for "Top level". */
+        void onPick(Library.Playlist target);
+    }
+
+    // ---------- rows ----------
+
+    /** A row for a folder or playlist, with a ⋮ button. */
+    static LinearLayout row(Activity a, Library.Playlist p, Runnable changed) {
+        Library lib = Library.get(a);
+        LinearLayout row = Ui.row(a);
+        row.setPadding(Ui.dp(a, 16), Ui.dp(a, 8), Ui.dp(a, 4), Ui.dp(a, 8));
+        int sub = lib.children(p.id).size();
+        if (p.youtube) {
+            row.addView(Ui.tile(a, "▶", 52, Ui.YT));
+        } else {
+            ImageView icon = new ImageView(a);
+            icon.setImageResource(sub > 0 || p.songIds.isEmpty() ? R.drawable.ic_folder : R.drawable.ic_music);
+            icon.setColorFilter(Ui.TEXT);
+            int pad = Ui.dp(a, 13);
+            icon.setPadding(pad, pad, pad, pad);
+            icon.setBackground(Ui.round(Ui.colorFor(p.name), Ui.dp(a, 6)));
+            row.addView(icon, new LinearLayout.LayoutParams(Ui.dp(a, 52), Ui.dp(a, 52)));
+        }
+        LinearLayout col = Ui.column(a);
+        col.setPadding(Ui.dp(a, 14), 0, Ui.dp(a, 4), 0);
+        col.addView(Ui.line(a, p.name, 16, Ui.TEXT, false));
+        String subtitle = p.subtitle(sub) + (p.driveFolder != null ? "  ·  Drive" : "");
+        col.addView(Ui.line(a, subtitle, 13, Ui.SUB, false));
+        row.addView(col, Ui.weight());
+        ImageButton more = Ui.icon(a, R.drawable.ic_more, 40, Ui.SUB);
+        more.setOnClickListener(v -> menu(a, v, p, changed));
+        row.addView(more);
+        row.setMinimumHeight(Ui.dp(a, 68));
+        return row;
+    }
+
+    /** The "+ New folder" row. */
+    static LinearLayout addRow(Activity a, String label) {
+        LinearLayout row = Ui.row(a);
+        row.setPadding(Ui.dp(a, 16), Ui.dp(a, 8), Ui.dp(a, 4), Ui.dp(a, 8));
+        android.widget.TextView plus = Ui.tile(a, "+", 52, Ui.SURFACE2);
+        plus.setText("+");
+        plus.setGravity(Gravity.CENTER);
+        row.addView(plus);
+        android.widget.TextView t = Ui.line(a, label, 16, Ui.TEXT, true);
+        t.setPadding(Ui.dp(a, 14), 0, 0, 0);
+        row.addView(t, Ui.weight());
+        row.setMinimumHeight(Ui.dp(a, 68));
+        return row;
+    }
+
+    static void open(Activity a, Library.Playlist p) {
+        a.startActivity(new Intent(a, p.youtube ? YouTubeActivity.class : PlaylistActivity.class).putExtra("id", p.id));
+    }
+
+    // ---------- menu ----------
+
+    static void menu(Activity a, View anchor, Library.Playlist p, Runnable changed) {
+        Library lib = Library.get(a);
+        PopupMenu m = new PopupMenu(a, anchor);
+        if (!p.youtube) {
+            m.getMenu().add(0, 1, 0, "Play all");
+            m.getMenu().add(0, 2, 1, "Shuffle all");
+        }
+        if (p.driveFolder != null) m.getMenu().add(0, 6, 2, "Get new songs from Drive");
+        if (!p.youtube) m.getMenu().add(0, 7, 3, "New folder inside");
+        m.getMenu().add(0, 3, 4, "Rename");
+        m.getMenu().add(0, 4, 5, "Move to…");
+        m.getMenu().add(0, 5, 6, "Delete");
+        m.setOnMenuItemClickListener(item -> {
+            switch (item.getItemId()) {
+                case 1: Hub.play(a, lib.allSongsIn(p), 0, false); break;
+                case 2: Hub.play(a, lib.allSongsIn(p), 0, true); break;
+                case 3: rename(a, p, changed); break;
+                case 4: move(a, p, changed); break;
+                case 5: delete(a, p, changed); break;
+                case 6: Drive.load(a, p.driveFolder, p); break;
+                case 7: newFolder(a, p.id, f -> { changed.run(); open(a, f); }); break;
+            }
+            return true;
+        });
+        m.show();
+    }
+
+    interface Created {
+        void onCreated(Library.Playlist folder);
+    }
+
+    static void newFolder(Activity a, String parentId, Created done) {
+        askName(a, parentId == null ? "New folder" : "New folder inside", "New folder", n -> {
+            Library.Playlist f = Library.get(a).newPlaylist(n, parentId);
+            done.onCreated(f);
+        });
+    }
+
+    static void rename(Activity a, Library.Playlist p, Runnable after) {
+        askName(a, "Rename", p.name, n -> {
+            p.name = n;
+            Library.get(a).save();
+            after.run();
+        });
+    }
+
+    static void move(Activity a, Library.Playlist p, Runnable after) {
+        Library lib = Library.get(a);
+        pick(a, "Move \"" + p.name + "\" to", lib.moveTargets(p), true, target -> {
+            p.parentId = target == null ? null : target.id;
+            lib.save();
+            Toast.makeText(a, "Moved to " + (target == null ? "Playlists" : lib.path(target)), Toast.LENGTH_SHORT).show();
+            after.run();
+        });
+    }
+
+    static void delete(Activity a, Library.Playlist p, Runnable after) {
+        Library lib = Library.get(a);
+        int inside = lib.countTree(p);
+        String msg = "Delete \"" + p.name + "\"" + (inside > 0 ? " and the " + inside
+                + (inside == 1 ? " folder" : " folders") + " inside it" : "") + "?\n\nThe songs stay in your library.";
+        new AlertDialog.Builder(a).setMessage(msg)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Delete", (d, w) -> {
+                    lib.deleteTree(p);
+                    lib.save();
+                    after.run();
+                }).show();
+    }
+
+    /** Lets you choose a folder. With allowTop, the first choice is the top level. */
+    static void pick(Activity a, String title, List<Library.Playlist> targets, boolean allowTop, PickCallback cb) {
+        Library lib = Library.get(a);
+        int off = allowTop ? 1 : 0;
+        String[] names = new String[targets.size() + off];
+        if (allowTop) names[0] = "⌂  Playlists (top level)";
+        for (int i = 0; i < targets.size(); i++) names[i + off] = lib.path(targets.get(i));
+        if (names.length == 0) {
+            Toast.makeText(a, "There are no folders yet", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new AlertDialog.Builder(a).setTitle(title)
+                .setItems(names, (d, which) -> cb.onPick(which < off ? null : targets.get(which - off)))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    static void askName(Activity a, String title, String def, NameCallback cb) {
+        final EditText e = new EditText(a);
+        e.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        e.setText(def);
+        e.setSelectAllOnFocus(true);
+        LinearLayout box = Ui.column(a);
+        box.setPadding(Ui.dp(a, 20), Ui.dp(a, 8), Ui.dp(a, 20), 0);
+        box.addView(e);
+        new AlertDialog.Builder(a).setTitle(title).setView(box)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("OK", (d, w) -> {
+                    String n = e.getText().toString().trim();
+                    cb.onName(n.isEmpty() ? def : n);
+                }).show();
+        e.requestFocus();
+    }
+}
