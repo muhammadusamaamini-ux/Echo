@@ -1,4 +1,4 @@
-package com.usama.naghma;
+package com.usama.echo;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -116,7 +116,7 @@ public class YouTubeActivity extends Activity {
             @JavascriptInterface
             public void onState(int state, int index) {
                 main.post(() -> {
-                    if (state == 1) Hub.pauseIfPlaying(); // playing: stop Naghma's own music
+                    if (state == 1) Hub.pauseIfPlaying(); // playing: stop Echo's own music
                     if (index != current) {
                         current = index;
                         adapter.notifyDataSetChanged();

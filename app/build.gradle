@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'com.usama.naghma'
+    namespace 'com.usama.echo'
     compileSdk 34
 
     defaultConfig {
-        applicationId 'com.usama.naghma'
+        applicationId 'com.usama.echo'
         minSdk 24
         targetSdk 34
         def buildNumber = (project.findProperty('buildNumber') ?: '1').toString().toInteger()
@@ -18,7 +18,7 @@ android {
     // Fixed signing key, so every new build installs over the old one and keeps your music.
     signingConfigs {
         debug {
-            storeFile file('naghma.keystore')
+            storeFile file('echo.keystore')
             storePassword 'android'
             keyAlias 'androiddebugkey'
             keyPassword 'android'

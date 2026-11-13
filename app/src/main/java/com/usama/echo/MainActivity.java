@@ -1,4 +1,4 @@
-package com.usama.naghma;
+package com.usama.echo;
 
 import android.Manifest;
 import android.app.Activity;
@@ -54,7 +54,7 @@ public class MainActivity extends Activity {
         // Header
         LinearLayout head = Ui.row(this);
         head.setPadding(Ui.dp(this, 20), Ui.dp(this, 14), Ui.dp(this, 16), Ui.dp(this, 6));
-        TextView name = Ui.text(this, "Naghma", 28, Ui.TEXT, true);
+        TextView name = Ui.text(this, "Echo", 28, Ui.TEXT, true);
         head.addView(name, Ui.weight());
         TextView imp = Ui.pill(this, "+ Import", true);
         imp.setOnClickListener(v -> showImport());
@@ -285,7 +285,7 @@ public class MainActivity extends Activity {
         m.getMenu().add(0, 2, 1, "Add to queue");
         m.getMenu().add(0, 3, 2, "Add to playlist…");
         m.getMenu().add(0, 4, 3, "Search on Google");
-        m.getMenu().add(0, 5, 4, s.source.equals("device") ? "Remove from Naghma" : "Delete");
+        m.getMenu().add(0, 5, 4, s.source.equals("device") ? "Remove from Echo" : "Delete");
         m.setOnMenuItemClickListener(item -> {
             switch (item.getItemId()) {
                 case 1: Hub.playNext(this, s); toast("Plays next"); break;
@@ -302,8 +302,8 @@ public class MainActivity extends Activity {
 
     private void confirmDelete(Library.Song s) {
         String msg = s.source.equals("device")
-                ? "Remove \"" + s.title + "\" from Naghma? The file stays on your phone."
-                : "Delete \"" + s.title + "\"? It is removed from Naghma and all playlists.";
+                ? "Remove \"" + s.title + "\" from Echo? The file stays on your phone."
+                : "Delete \"" + s.title + "\"? It is removed from Echo and all playlists.";
         new AlertDialog.Builder(this).setMessage(msg).setNegativeButton("Cancel", null)
                 .setPositiveButton(s.source.equals("device") ? "Remove" : "Delete", (d, w) -> {
                     Library.get(this).deleteSong(s);
@@ -484,7 +484,7 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(code, perms, results);
         if (code == REQ_PERM) {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) importDevice();
-            else toast("Naghma needs permission to see the music on your phone");
+            else toast("Echo needs permission to see the music on your phone");
         }
     }
 
@@ -512,7 +512,7 @@ public class MainActivity extends Activity {
         handleShare(intent);
     }
 
-    /** Something was shared to Naghma: a YouTube link or audio files. */
+    /** Something was shared to Echo: a YouTube link or audio files. */
     @SuppressWarnings("deprecation")
     private void handleShare(Intent intent) {
         if (intent == null) return;

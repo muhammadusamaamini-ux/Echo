@@ -1,4 +1,4 @@
-package com.usama.naghma;
+package com.usama.echo;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -101,7 +101,7 @@ final class YouTube {
         int p = Ui.dp(a, 20);
         box.setPadding(p, Ui.dp(a, 8), p, 0);
         TextView help = Ui.text(a, "Paste a YouTube playlist link. It must be Public or Unlisted.\n"
-                + "Tip: in the YouTube app, open the playlist, tap Share, and choose Naghma.", 14, Ui.SUB, false);
+                + "Tip: in the YouTube app, open the playlist, tap Share, and choose Echo.", 14, Ui.SUB, false);
         box.addView(help);
         final EditText link = new EditText(a);
         link.setHint("https://youtube.com/playlist?list=…");
