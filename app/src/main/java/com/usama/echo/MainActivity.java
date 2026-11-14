@@ -32,11 +32,14 @@ import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
-    private static final int REQ_FILES = 1, REQ_PERM = 2, REQ_WEB = 3, REQ_NOTIFY = 4;
+    private static final int REQ_FILES = 1, REQ_PERM = 2, REQ_WEB = 3, REQ_NOTIFY = 4, REQ_VPERM = 6, REQ_VIDEO_FILE = 7;
 
-    private static final int P_HOME = 0, P_SONGS = 1, P_FILTER = 2, P_SEARCH = 3, P_LIBRARY = 4;
-    private final View[] pages = new View[5];
-    private final TextView[] chips = new TextView[4];
+    private static final int P_HOME = 0, P_SONGS = 1, P_FILTER = 2, P_SEARCH = 3, P_LIBRARY = 4, P_VIDEOS = 5;
+    private final View[] pages = new View[6];
+    private final TextView[] chips = new TextView[5];
+    private List<Videos.Folder> videoFolders = new ArrayList<>();
+    private BaseAdapter videoAdapter;
+    private TextView videoStatus;
     private final LinearLayout[] navItems = new LinearLayout[3];
     private int nav, chip;
     private TextView greeting;
@@ -88,8 +91,8 @@ public class MainActivity extends Activity {
         chipScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout chipRow = Ui.row(this);
         chipRow.setPadding(Ui.dp(this, 14), Ui.dp(this, 10), Ui.dp(this, 14), Ui.dp(this, 6));
-        String[] labels = {"Playlists", "Songs", "YouTube", "Drive"};
-        for (int i = 0; i < 4; i++) {
+        String[] labels = {"Playlists", "Videos", "Songs", "YouTube", "Drive"};
+        for (int i = 0; i < 5; i++) {
             TextView t = Ui.text(this, labels[i], 14, Ui.TEXT, true);
             t.setPadding(Ui.dp(this, 18), Ui.dp(this, 8), Ui.dp(this, 18), Ui.dp(this, 8));
             final int idx = i;
@@ -109,6 +112,7 @@ public class MainActivity extends Activity {
         pages[P_FILTER] = buildFilterPage();
         pages[P_SEARCH] = buildSearchPage();
         pages[P_LIBRARY] = buildPlaylistsPage();
+        pages[P_VIDEOS] = buildVideosPage();
         for (View p : pages) content.addView(p, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         root.addView(content, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -417,13 +421,16 @@ public class MainActivity extends Activity {
 
     private void showChip(int c) {
         chip = c;
-        for (int k = 0; k < 4; k++) {
+        for (int k = 0; k < 5; k++) {
             boolean on = k == c;
             chips[k].setTextColor(on ? Ui.TEXT : Ui.SUB);
             chips[k].setBackground(on ? Ui.accentGrad(Ui.dp(this, 20)) : Ui.glass(this, 20));
         }
         if (c == 0) showPage(P_HOME);
-        else if (c == 1) showPage(P_SONGS);
+        else if (c == 1) {
+            showPage(P_VIDEOS);
+            loadVideos();
+        } else if (c == 2) showPage(P_SONGS);
         else {
             refreshFilter();
             showPage(P_FILTER);
@@ -602,15 +609,126 @@ public class MainActivity extends Activity {
         filtered = new ArrayList<>();
         for (Library.Playlist p : lib.playlists) {
             if (lib.isHidden(p)) continue;
-            if (chip == 2 && p.youtube) filtered.add(p);
-            if (chip == 3 && p.driveFolder != null && (p.driveRoot == null || p.driveRoot.equals(p.driveFolder))) {
+            if (chip == 3 && p.youtube) filtered.add(p);
+            if (chip == 4 && p.driveFolder != null && (p.driveRoot == null || p.driveRoot.equals(p.driveFolder))) {
                 filtered.add(p);
             }
         }
         java.util.Collections.sort(filtered, (x, y) -> x.name.compareToIgnoreCase(y.name));
-        filterEmpty.setText(chip == 2 ? "No YouTube playlists yet.\n\nTap + → Import music → YouTube playlist."
+        filterEmpty.setText(chip == 3 ? "No YouTube playlists yet.\n\nTap + → Import music → YouTube playlist."
                 : "No Google Drive folders yet.\n\nTap + → Import music → Google Drive folder.");
         filterAdapter.notifyDataSetChanged();
+    }
+
+    // ---------- Videos ----------
+
+    private View buildVideosPage() {
+        LinearLayout page = Ui.column(this);
+        android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(this);
+        hs.setHorizontalScrollBarEnabled(false);
+        LinearLayout actions = Ui.row(this);
+        actions.setPadding(Ui.dp(this, 14), Ui.dp(this, 6), Ui.dp(this, 14), Ui.dp(this, 6));
+        TextView edit = Ui.pill(this, "✂  Edit a video", true);
+        edit.setOnClickListener(v -> startActivity(new Intent(this, EditorActivity.class)));
+        TextView open = Ui.pill(this, "Open file", false);
+        open.setOnClickListener(v -> {
+            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+                    .putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"video/*", "audio/*"});
+            try {
+                startActivityForResult(i, REQ_VIDEO_FILE);
+            } catch (Exception e) {
+                toast("No file picker found");
+            }
+        });
+        TextView stream = Ui.pill(this, "Network stream", false);
+        stream.setOnClickListener(v -> askStream());
+        actions.addView(edit);
+        actions.addView(open, chipMargin());
+        actions.addView(stream, chipMargin());
+        hs.addView(actions);
+        page.addView(hs);
+        videoStatus = Ui.text(this, "", 14, Ui.SUB, false);
+        videoStatus.setPadding(Ui.dp(this, 20), Ui.dp(this, 8), Ui.dp(this, 20), Ui.dp(this, 4));
+        page.addView(videoStatus);
+        ListView list = new ListView(this);
+        list.setDivider(null);
+        videoAdapter = new BaseAdapter() {
+            @Override public int getCount() { return videoFolders.size(); }
+            @Override public Object getItem(int i) { return videoFolders.get(i); }
+            @Override public long getItemId(int i) { return i; }
+
+            @Override
+            public View getView(int i, View convert, ViewGroup parent) {
+                Videos.Folder f = videoFolders.get(i);
+                LinearLayout row = Ui.row(MainActivity.this);
+                row.setPadding(Ui.dp(MainActivity.this, 16), Ui.dp(MainActivity.this, 8),
+                        Ui.dp(MainActivity.this, 16), Ui.dp(MainActivity.this, 8));
+                android.widget.ImageView thumb = new android.widget.ImageView(MainActivity.this);
+                thumb.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+                thumb.setBackground(Ui.gradFor(f.name, Ui.dp(MainActivity.this, 12)));
+                thumb.setClipToOutline(true);
+                row.addView(thumb, new LinearLayout.LayoutParams(Ui.dp(MainActivity.this, 96), Ui.dp(MainActivity.this, 60)));
+                if (!f.videos.isEmpty()) Videos.thumb(MainActivity.this, f.videos.get(0), thumb);
+                LinearLayout col = Ui.column(MainActivity.this);
+                col.setPadding(Ui.dp(MainActivity.this, 14), 0, 0, 0);
+                col.addView(Ui.line(MainActivity.this, f.name, 16, Ui.TEXT, true));
+                col.addView(Ui.line(MainActivity.this, f.videos.size() + (f.videos.size() == 1 ? " video" : " videos"),
+                        13, Ui.SUB, false));
+                row.addView(col, Ui.weight());
+                return row;
+            }
+        };
+        list.setAdapter(videoAdapter);
+        list.setOnItemClickListener((p, v, pos, id) -> startActivity(new Intent(this, VideoListActivity.class)
+                .putExtra("folder", videoFolders.get(pos).name)));
+        page.addView(list, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        return page;
+    }
+
+    private LinearLayout.LayoutParams chipMargin() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.leftMargin = Ui.dp(this, 8);
+        return lp;
+    }
+
+    private void loadVideos() {
+        String perm = Build.VERSION.SDK_INT >= 33 ? Manifest.permission.READ_MEDIA_VIDEO
+                : Manifest.permission.READ_EXTERNAL_STORAGE;
+        if (checkSelfPermission(perm) != PackageManager.PERMISSION_GRANTED) {
+            videoStatus.setText("Echo needs permission to show the videos on your phone.");
+            requestPermissions(new String[]{perm}, REQ_VPERM);
+            return;
+        }
+        videoStatus.setText("Looking for videos…");
+        new Thread(() -> {
+            List<Videos.Folder> found = Videos.scan(this);
+            runOnUiThread(() -> {
+                videoFolders = found;
+                videoAdapter.notifyDataSetChanged();
+                int n = 0;
+                for (Videos.Folder f : found) n += f.videos.size();
+                videoStatus.setText(n == 0 ? "No videos found on this phone." : n + " videos in " + found.size()
+                        + (found.size() == 1 ? " folder" : " folders"));
+            });
+        }).start();
+    }
+
+    private void askStream() {
+        final EditText e = new EditText(this);
+        e.setHint("https://…  (video or audio link, .m3u8, .mp4 …)");
+        e.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        LinearLayout box = Ui.column(this);
+        box.setPadding(Ui.dp(this, 20), Ui.dp(this, 8), Ui.dp(this, 20), 0);
+        box.addView(e);
+        new AlertDialog.Builder(this).setTitle("Open network stream").setView(box)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Play", (d, w) -> {
+                    String u = e.getText().toString().trim();
+                    if (u.isEmpty()) return;
+                    if (!u.contains("://")) u = "https://" + u;
+                    startActivity(new Intent(this, VideoPlayerActivity.class).setData(Uri.parse(u)));
+                }).show();
     }
 
     private void addMenu(View anchor) {
@@ -634,7 +752,7 @@ public class MainActivity extends Activity {
         listAdapter.notifyDataSetChanged();
         if (searchBox != null) runSearch();
         refreshHome();
-        if (chip >= 2) refreshFilter();
+        if (chip >= 3) refreshFilter();
         if (greeting != null && !greeting.getText().toString().equals(greetingText())) {
             greeting.setText(greetingText());
             Ui.gradientText(greeting);
@@ -837,6 +955,11 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
         super.onRequestPermissionsResult(code, perms, results);
+        if (code == REQ_VPERM) {
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) loadVideos();
+            else videoStatus.setText("Without permission Echo can't list your videos. You can still use Open file.");
+            return;
+        }
         if (code == REQ_PERM) {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) importDevice();
             else toast("Echo needs permission to see the music on your phone");
@@ -847,6 +970,11 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
         if (res != RESULT_OK || data == null) return;
+        if (req == REQ_VIDEO_FILE && data.getData() != null) {
+            startActivity(new Intent(this, VideoPlayerActivity.class).setData(data.getData())
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
+            return;
+        }
         if (req == REQ_FILES) {
             List<Uri> uris = new ArrayList<>();
             if (data.getClipData() != null) {

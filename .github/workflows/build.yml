@@ -24,7 +24,21 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build the APK
-        run: gradle assembleRelease --no-daemon -PbuildNumber=${{ github.run_number }}
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon -PbuildNumber=${{ github.run_number }} 2>&1 | tee build.log
+
+      - name: Save the build log if it failed (so Claude can read it)
+        if: failure()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: failed-build-${{ github.run_number }}
+          name: Failed build ${{ github.run_number }} (log only)
+          body: This build failed. The log is attached. Not an app update.
+          files: build.log
+          prerelease: true
+          make_latest: false
 
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk Echo.apk
