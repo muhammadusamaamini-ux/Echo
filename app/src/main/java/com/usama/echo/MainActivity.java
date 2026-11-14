@@ -172,18 +172,14 @@ public class MainActivity extends Activity {
         PopupMenu m = new PopupMenu(this, anchor);
         m.getMenu().add(0, 3, 0, "Hidden folders");
         m.getMenu().add(0, 1, 1, "Check for updates");
-        m.getMenu().add(0, 2, 1, "About (build " + Updater.installedBuild(this) + ")");
+        m.getMenu().add(0, 2, 2, "About & features (build " + Updater.installedBuild(this) + ")");
         m.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == 3) {
                 Folders.showHidden(this, this::refresh);
             } else if (item.getItemId() == 1) {
                 Updater.check(this);
             } else {
-                new AlertDialog.Builder(this).setTitle("Echo")
-                        .setMessage("Build " + Updater.installedBuild(this) + "\n\nYour personal music player. "
-                                + "Echo checks for updates every few hours and tells you with a notification.")
-                        .setPositiveButton("Check for updates", (d, w) -> Updater.check(this))
-                        .setNegativeButton("Close", null).show();
+                About.show(this);
             }
             return true;
         });

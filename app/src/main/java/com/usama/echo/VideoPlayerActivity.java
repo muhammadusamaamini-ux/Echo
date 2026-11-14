@@ -70,7 +70,9 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
     private float downX, downY, startBright;
     private int startVol;
     private long startPos, seekTarget = -1;
-    private int mode; // 0 none, 1 seek, 2 brightness, 3 volume
+    private int mode; // 0 none, 1 seek, 2 brightness, 3 volume, 4 two-finger zoom
+    // two-finger zoom
+    private float zoom = 1f, panX, panY, lastFx, lastFy;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -90,7 +92,7 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
 
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
-        view = new PlayerView(this);
+        view = (PlayerView) getLayoutInflater().inflate(R.layout.video_player_view, root, false);
         view.setShowNextButton(uris.size() > 1);
         view.setShowPreviousButton(uris.size() > 1);
         view.setShowSubtitleButton(true);
@@ -254,6 +256,9 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
         String[] names = {"Fit screen", "Zoom (crop)", "Stretch"};
         resize = (resize + 1) % modes.length;
         view.setResizeMode(modes[resize]);
+        zoom = 1f;
+        panX = panY = 0;
+        applyZoom();
         flash(names[resize]);
     }
 
@@ -444,7 +449,31 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
 
     private final Runnable hideHud = () -> hud.setVisibility(View.GONE);
 
+    /** Scales and moves the video picture (two-finger pinch and drag). */
+    private void applyZoom() {
+        View s = view.getVideoSurfaceView();
+        if (s == null) return;
+        float maxX = s.getWidth() * (zoom - 1f) / 2f, maxY = s.getHeight() * (zoom - 1f) / 2f;
+        panX = Math.max(-maxX, Math.min(maxX, panX));
+        panY = Math.max(-maxY, Math.min(maxY, panY));
+        s.setScaleX(zoom);
+        s.setScaleY(zoom);
+        s.setTranslationX(panX);
+        s.setTranslationY(panY);
+    }
+
     private void setupGestures() {
+        final android.view.ScaleGestureDetector scaler = new android.view.ScaleGestureDetector(this,
+                new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                    @Override
+                    public boolean onScale(android.view.ScaleGestureDetector d) {
+                        if (locked) return true;
+                        zoom = Math.max(1f, Math.min(5f, zoom * d.getScaleFactor()));
+                        applyZoom();
+                        flash("Zoom " + Math.round(zoom * 100) + "%");
+                        return true;
+                    }
+                });
         final GestureDetector taps = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onSingleTapConfirmed(MotionEvent e) {
@@ -469,9 +498,20 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
             }
         });
         view.setOnTouchListener((v, e) -> {
-            taps.onTouchEvent(e);
+            scaler.onTouchEvent(e);
+            if (e.getPointerCount() == 1 && mode != 4) taps.onTouchEvent(e);
             if (locked || player == null) return true;
             switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    // a second finger: zoom / move instead of seek, brightness or volume
+                    mode = 4;
+                    seekTarget = -1;
+                    view.hideController();
+                    lastFx = (e.getX(0) + e.getX(1)) / 2f;
+                    lastFy = (e.getY(0) + e.getY(1)) / 2f;
+                    break;
+                case MotionEvent.ACTION_POINTER_UP:
+                    break;
                 case MotionEvent.ACTION_DOWN:
                     downX = e.getX();
                     downY = e.getY();
@@ -483,6 +523,19 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
                     startBright = wb >= 0 ? wb : 0.5f;
                     break;
                 case MotionEvent.ACTION_MOVE:
+                    if (mode == 4) {
+                        if (e.getPointerCount() > 1) {
+                            float fx = (e.getX(0) + e.getX(1)) / 2f, fy = (e.getY(0) + e.getY(1)) / 2f;
+                            if (zoom > 1f) {
+                                panX += fx - lastFx;
+                                panY += fy - lastFy;
+                                applyZoom();
+                            }
+                            lastFx = fx;
+                            lastFy = fy;
+                        }
+                        break;
+                    }
                     float dx = e.getX() - downX, dy = e.getY() - downY;
                     if (mode == 0) {
                         int slop = Ui.dp(this, 24);
@@ -514,6 +567,11 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
                     if (mode == 1 && seekTarget >= 0) player.seekTo(seekTarget);
+                    if (mode == 4 && zoom < 1.05f) {
+                        zoom = 1f;
+                        panX = panY = 0;
+                        applyZoom();
+                    }
                     mode = 0;
                     break;
             }
