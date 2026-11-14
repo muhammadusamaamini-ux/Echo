@@ -25,6 +25,8 @@ public class PlaylistActivity extends Activity {
     private MiniPlayer mini;
     private TextView titleView, countView, pathView, empty;
     private String lastId;
+    private ListGrid listGrid;
+    private ImageButton viewToggle;
     private Selection selection;
     private static final int A_MOVE = 1, A_COPY = 2, A_QUEUE = 3, A_PLAY = 4, A_REMOVE_HERE = 5, A_REMOVE_ECHO = 6;
 
@@ -40,6 +42,8 @@ public class PlaylistActivity extends Activity {
         root.setBackgroundColor(Ui.BG);
 
         LinearLayout bar = Ui.topBar(this, "", R.drawable.ic_back);
+        viewToggle = ListGrid.toggleButton(this, () -> listGrid.apply());
+        bar.addView(viewToggle);
         ImageButton menu = Ui.icon(this, R.drawable.ic_more, 44, Ui.TEXT);
         menu.setOnClickListener(this::showMenu);
         bar.addView(menu);
@@ -119,17 +123,23 @@ public class PlaylistActivity extends Activity {
             @Override public int getCount() { return folders.size() + songs.getCount(); }
             @Override public Object getItem(int i) { return i < folders.size() ? folders.get(i) : songs.getItem(i - folders.size()); }
             @Override public long getItemId(int i) { return i; }
-            @Override public int getViewTypeCount() { return 2; }
-            @Override public int getItemViewType(int i) { return i < folders.size() ? 0 : 1; }
+            @Override public int getViewTypeCount() { return 4; }
+            @Override public int getItemViewType(int i) {
+                return (i < folders.size() ? 0 : 1) + (ListGrid.isGrid(PlaylistActivity.this) ? 2 : 0);
+            }
 
             @Override
             public View getView(int i, View convert, ViewGroup parent) {
-                if (i < folders.size()) return Folders.row(PlaylistActivity.this, folders.get(i), PlaylistActivity.this::refresh);
+                if (i < folders.size()) {
+                    return ListGrid.isGrid(PlaylistActivity.this)
+                            ? Folders.tile(PlaylistActivity.this, folders.get(i), PlaylistActivity.this::refresh)
+                            : Folders.row(PlaylistActivity.this, folders.get(i), PlaylistActivity.this::refresh);
+                }
                 return songs.getView(i - folders.size(), convert, parent);
             }
         };
-        ListView list = new ListView(this);
-        list.setDivider(null);
+        ListGrid list = new ListGrid(this);
+        listGrid = list;
         list.setAdapter(adapter);
         list.setOnItemClickListener((p, v, pos, id) -> {
             if (pos < folders.size()) {
@@ -196,6 +206,8 @@ public class PlaylistActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (listGrid != null) listGrid.apply();
+        if (viewToggle != null) ListGrid.syncButton(viewToggle, this);
         if (adapter != null) refresh();
     }
 

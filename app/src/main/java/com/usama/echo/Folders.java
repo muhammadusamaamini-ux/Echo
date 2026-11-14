@@ -62,6 +62,55 @@ final class Folders {
         return row;
     }
 
+    /** A tile (grid view) for a folder or playlist. */
+    static LinearLayout tile(Activity a, Library.Playlist p, Runnable changed) {
+        Library lib = Library.get(a);
+        int sub = lib.visibleChildren(p.id).size();
+        LinearLayout c = Ui.column(a);
+        c.setPadding(Ui.dp(a, 8), Ui.dp(a, 8), Ui.dp(a, 2), Ui.dp(a, 6));
+        c.setBackground(Ui.glass(a, 16));
+        ImageView icon = new ImageView(a);
+        boolean folder = sub > 0 || p.songIds.isEmpty();
+        icon.setImageResource(p.youtube ? R.drawable.ic_play : folder ? R.drawable.ic_folder : R.drawable.ic_music);
+        icon.setColorFilter(Ui.TEXT);
+        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        int pad = Ui.dp(a, 30);
+        icon.setPadding(pad, pad, pad, pad);
+        icon.setBackground(p.youtube ? Ui.ytGrad(Ui.dp(a, 12)) : Ui.gradFor(p.name, Ui.dp(a, 12)));
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(a, 104));
+        ilp.rightMargin = Ui.dp(a, 6);
+        c.addView(icon, ilp);
+        LinearLayout row = Ui.row(a);
+        row.setPadding(0, Ui.dp(a, 6), 0, 0);
+        LinearLayout col = Ui.column(a);
+        col.addView(Ui.line(a, p.name, 14, Ui.TEXT, true));
+        col.addView(Ui.line(a, p.subtitle(sub) + (p.driveFolder != null ? " · Drive" : ""), 11, Ui.SUB, false));
+        row.addView(col, Ui.weight());
+        ImageButton more = Ui.icon(a, R.drawable.ic_more, 34, Ui.SUB);
+        more.setOnClickListener(v -> menu(a, v, p, changed));
+        row.addView(more);
+        c.addView(row);
+        return c;
+    }
+
+    /** The "+ New folder" tile. */
+    static LinearLayout addTile(Activity a, String label) {
+        LinearLayout c = Ui.column(a);
+        c.setGravity(Gravity.CENTER);
+        android.graphics.drawable.GradientDrawable g = Ui.round(0x0DFFFFFF, Ui.dp(a, 16));
+        g.setStroke(Ui.dp(a, 1), 0x40FFFFFF, Ui.dp(a, 6), Ui.dp(a, 4));
+        c.setBackground(g);
+        c.setMinimumHeight(Ui.dp(a, 160));
+        ImageView plus = new ImageView(a);
+        plus.setImageResource(R.drawable.ic_add);
+        plus.setColorFilter(Ui.SUB);
+        c.addView(plus, new LinearLayout.LayoutParams(Ui.dp(a, 40), Ui.dp(a, 40)));
+        android.widget.TextView t = Ui.text(a, label, 13, Ui.SUB, false);
+        t.setPadding(0, Ui.dp(a, 6), 0, 0);
+        c.addView(t);
+        return c;
+    }
+
     /** The "+ New folder" row. */
     static LinearLayout addRow(Activity a, String label) {
         LinearLayout row = Ui.row(a);

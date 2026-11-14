@@ -48,6 +48,8 @@ public class MainActivity extends Activity {
     private List<Library.Playlist> filtered = new ArrayList<>();
     private BaseAdapter filterAdapter;
     private TextView filterEmpty;
+    private final List<ListGrid> grids = new ArrayList<>();
+    private ImageButton viewToggle;
     private SongAdapter songAdapter, searchAdapter;
     private BaseAdapter listAdapter;
     private List<Library.Playlist> playlists = new ArrayList<>();
@@ -78,6 +80,10 @@ public class MainActivity extends Activity {
         greeting.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 4), 0);
         head.addView(greeting, Ui.weight());
         Ui.gradientText(greeting);
+        viewToggle = ListGrid.toggleButton(this, () -> {
+            for (ListGrid g : grids) g.apply();
+        });
+        head.addView(viewToggle);
         ImageButton add = Ui.icon(this, R.drawable.ic_add, 44, Ui.TEXT);
         add.setOnClickListener(this::addMenu);
         head.addView(add);
@@ -229,8 +235,8 @@ public class MainActivity extends Activity {
     private View buildSongsPage() {
         LinearLayout page = Ui.column(this);
         FrameLayout f = new FrameLayout(this);
-        ListView list = new ListView(this);
-        list.setDivider(null);
+        ListGrid list = new ListGrid(this);
+        grids.add(list);
         songAdapter = new SongAdapter(this, this::songMenu);
         list.setAdapter(songAdapter);
         songSel = selectionFor(songAdapter);
@@ -255,23 +261,33 @@ public class MainActivity extends Activity {
     }
 
     private View buildPlaylistsPage() {
-        ListView list = new ListView(this);
-        list.setDivider(null);
+        ListGrid list = new ListGrid(this);
+        grids.add(list);
         listAdapter = new BaseAdapter() {
+            @Override public int getViewTypeCount() { return 2; }
+            @Override public int getItemViewType(int i) { return ListGrid.isGrid(MainActivity.this) ? 1 : 0; }
             @Override public int getCount() { return playlists.size() + 1; }
             @Override public Object getItem(int i) { return i == 0 ? null : playlists.get(i - 1); }
             @Override public long getItemId(int i) { return i; }
 
             @Override
             public View getView(int i, View convert, ViewGroup parent) {
-                if (i == 0) return Folders.addRow(MainActivity.this, "New folder");
-                return Folders.row(MainActivity.this, playlists.get(i - 1), MainActivity.this::refresh);
+                boolean g = ListGrid.isGrid(MainActivity.this);
+                if (i == 0) return g ? Folders.addTile(MainActivity.this, "New folder")
+                        : Folders.addRow(MainActivity.this, "New folder");
+                Library.Playlist pl = playlists.get(i - 1);
+                return g ? Folders.tile(MainActivity.this, pl, MainActivity.this::refresh)
+                        : Folders.row(MainActivity.this, pl, MainActivity.this::refresh);
             }
         };
         list.setAdapter(listAdapter);
         list.setOnItemClickListener((parent, v, pos, id) -> {
             if (pos == 0) Folders.newFolder(this, null, f -> { refresh(); openPlaylist(f); });
             else openPlaylist(playlists.get(pos - 1));
+        });
+        list.setOnItemLongClickListener((parent, v, pos, id) -> {
+            if (pos > 0) Folders.menu(this, v, playlists.get(pos - 1), this::refresh);
+            return true;
         });
         return list;
     }
@@ -436,6 +452,11 @@ public class MainActivity extends Activity {
     private void showPage(int p) {
         exitSelections();
         for (int k = 0; k < pages.length; k++) pages[k].setVisibility(k == p ? View.VISIBLE : View.GONE);
+        // list / tile switch for the screens that are lists
+        if (viewToggle != null) {
+            viewToggle.setVisibility(p == P_HOME || p == P_SEARCH ? View.GONE : View.VISIBLE);
+            ListGrid.syncButton(viewToggle, this);
+        }
     }
 
     // ---------- Home: Recently played + Your folders ----------
@@ -576,16 +597,20 @@ public class MainActivity extends Activity {
 
     private View buildFilterPage() {
         FrameLayout f = new FrameLayout(this);
-        ListView list = new ListView(this);
-        list.setDivider(null);
+        ListGrid list = new ListGrid(this);
+        grids.add(list);
         filterAdapter = new BaseAdapter() {
+            @Override public int getViewTypeCount() { return 2; }
+            @Override public int getItemViewType(int i) { return ListGrid.isGrid(MainActivity.this) ? 1 : 0; }
             @Override public int getCount() { return filtered.size(); }
             @Override public Object getItem(int i) { return filtered.get(i); }
             @Override public long getItemId(int i) { return i; }
 
             @Override
             public View getView(int i, View convert, ViewGroup parent) {
-                return Folders.row(MainActivity.this, filtered.get(i), MainActivity.this::refresh);
+                return ListGrid.isGrid(MainActivity.this)
+                        ? Folders.tile(MainActivity.this, filtered.get(i), MainActivity.this::refresh)
+                        : Folders.row(MainActivity.this, filtered.get(i), MainActivity.this::refresh);
             }
         };
         list.setAdapter(filterAdapter);
@@ -646,9 +671,11 @@ public class MainActivity extends Activity {
         videoStatus = Ui.text(this, "", 14, Ui.SUB, false);
         videoStatus.setPadding(Ui.dp(this, 20), Ui.dp(this, 8), Ui.dp(this, 20), Ui.dp(this, 4));
         page.addView(videoStatus);
-        ListView list = new ListView(this);
-        list.setDivider(null);
+        ListGrid list = new ListGrid(this);
+        grids.add(list);
         videoAdapter = new BaseAdapter() {
+            @Override public int getViewTypeCount() { return 2; }
+            @Override public int getItemViewType(int i) { return ListGrid.isGrid(MainActivity.this) ? 1 : 0; }
             @Override public int getCount() { return videoFolders.size(); }
             @Override public Object getItem(int i) { return videoFolders.get(i); }
             @Override public long getItemId(int i) { return i; }
@@ -656,6 +683,25 @@ public class MainActivity extends Activity {
             @Override
             public View getView(int i, View convert, ViewGroup parent) {
                 Videos.Folder f = videoFolders.get(i);
+                if (ListGrid.isGrid(MainActivity.this)) {
+                    LinearLayout c = Ui.column(MainActivity.this);
+                    c.setPadding(Ui.dp(MainActivity.this, 8), Ui.dp(MainActivity.this, 8),
+                            Ui.dp(MainActivity.this, 8), Ui.dp(MainActivity.this, 8));
+                    c.setBackground(Ui.glass(MainActivity.this, 16));
+                    android.widget.ImageView th = new android.widget.ImageView(MainActivity.this);
+                    th.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+                    th.setBackground(Ui.gradFor(f.name, Ui.dp(MainActivity.this, 12)));
+                    th.setClipToOutline(true);
+                    c.addView(th, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                            Ui.dp(MainActivity.this, 96)));
+                    if (!f.videos.isEmpty()) Videos.thumb(MainActivity.this, f.videos.get(0), th);
+                    TextView n = Ui.line(MainActivity.this, f.name, 14, Ui.TEXT, true);
+                    n.setPadding(0, Ui.dp(MainActivity.this, 6), 0, 0);
+                    c.addView(n);
+                    c.addView(Ui.line(MainActivity.this, f.videos.size() + (f.videos.size() == 1 ? " video" : " videos"),
+                            11, Ui.SUB, false));
+                    return c;
+                }
                 LinearLayout row = Ui.row(MainActivity.this);
                 row.setPadding(Ui.dp(MainActivity.this, 16), Ui.dp(MainActivity.this, 8),
                         Ui.dp(MainActivity.this, 16), Ui.dp(MainActivity.this, 8));
@@ -758,6 +804,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        for (ListGrid g : grids) g.apply(); // the view may have been switched on another screen
+        if (viewToggle != null) ListGrid.syncButton(viewToggle, this);
         refresh();
         syncDrive();
     }

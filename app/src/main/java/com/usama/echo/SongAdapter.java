@@ -86,19 +86,68 @@ final class SongAdapter extends BaseAdapter {
         if (changed) notifyDataSetChanged();
     }
 
+    @Override public int getViewTypeCount() { return 2; }
+    @Override public int getItemViewType(int i) { return ListGrid.isGrid(ctx) ? 1 : 0; }
     @Override public int getCount() { return items.size(); }
     @Override public Object getItem(int i) { return items.get(i); }
     @Override public long getItemId(int i) { return i; }
 
     private static final class Holder {
+        boolean grid;
         TextView tile, title, sub;
         ImageButton more;
     }
 
+    /** A tile (grid view) for a song. */
+    private View tile(int position, View convert) {
+        Holder h;
+        if (convert == null || !(convert.getTag() instanceof Holder) || ((Holder) convert.getTag()).grid == false) {
+            LinearLayout c = Ui.column(ctx);
+            c.setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 2), Ui.dp(ctx, 6));
+            h = new Holder();
+            h.grid = true;
+            h.tile = Ui.text(ctx, "", 40, Ui.TEXT, true);
+            h.tile.setGravity(android.view.Gravity.CENTER);
+            LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(ctx, 104));
+            tlp.rightMargin = Ui.dp(ctx, 6);
+            c.addView(h.tile, tlp);
+            LinearLayout row = Ui.row(ctx);
+            row.setPadding(0, Ui.dp(ctx, 6), 0, 0);
+            LinearLayout col = Ui.column(ctx);
+            h.title = Ui.line(ctx, "", 14, Ui.TEXT, true);
+            h.sub = Ui.line(ctx, "", 11, Ui.SUB, false);
+            col.addView(h.title);
+            col.addView(h.sub);
+            row.addView(col, Ui.weight());
+            h.more = Ui.icon(ctx, R.drawable.ic_more, 34, Ui.SUB);
+            row.addView(h.more);
+            c.addView(row);
+            c.setTag(h);
+            convert = c;
+        } else {
+            h = (Holder) convert.getTag();
+        }
+        final Library.Song s = items.get(position);
+        boolean sel = selected.contains(s.id);
+        String letter = s.title == null || s.title.trim().isEmpty() ? "♪" :
+                s.title.trim().substring(0, s.title.trim().offsetByCodePoints(0, 1)).toUpperCase();
+        h.tile.setText(sel ? "✓" : letter);
+        h.tile.setBackground(sel ? Ui.accentGrad(Ui.dp(ctx, 12)) : Ui.gradFor(s.title, Ui.dp(ctx, 12)));
+        convert.setBackground(sel ? Ui.round(0x3300D2FF, Ui.dp(ctx, 16)) : Ui.glass(ctx, 16));
+        h.title.setText(s.title);
+        h.title.setTextColor(s.id.equals(currentId) ? Ui.ACCENT : Ui.TEXT);
+        h.sub.setText(s.artist == null || s.artist.isEmpty() ? ("drive".equals(s.source) ? "Drive" : "Unknown artist") : s.artist);
+        h.more.setVisibility(selecting ? View.INVISIBLE : View.VISIBLE);
+        final int pos = position;
+        h.more.setOnClickListener(v -> more.onMore(v, s, pos));
+        return convert;
+    }
+
     @Override
     public View getView(int position, View convert, ViewGroup parent) {
+        if (ListGrid.isGrid(ctx)) return tile(position, convert);
         Holder h;
-        if (convert == null) {
+        if (convert == null || !(convert.getTag() instanceof Holder) || ((Holder) convert.getTag()).grid) {
             LinearLayout row = Ui.row(ctx);
             row.setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 8), Ui.dp(ctx, 4), Ui.dp(ctx, 8));
             h = new Holder();
