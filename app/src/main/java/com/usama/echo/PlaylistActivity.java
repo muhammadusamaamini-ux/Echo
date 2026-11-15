@@ -262,6 +262,7 @@ public class PlaylistActivity extends Activity {
         m.getMenu().add(0, 4, 5, "Move down");
         m.getMenu().add(0, 5, 6, "Remove from this folder");
         m.getMenu().add(0, 8, 7, "Remove from Echo");
+        m.getMenu().add(0, 10, 9, "Edit audio (cut, trim…)");
         if (Selection.isDrive(s)) m.getMenu().add(0, 9, 8, "Open in Google Drive");
         m.setOnMenuItemClickListener(item -> {
             Library lib = Library.get(this);
@@ -274,6 +275,11 @@ public class PlaylistActivity extends Activity {
                 case 5: pl.songIds.remove(s.id); lib.save(); break;
                 case 8: Selection.removeFromEcho(this, java.util.Collections.singletonList(s), this::refresh); break;
                 case 9: Selection.openInDrive(this, s); break;
+                case 10:
+                    startActivity(new android.content.Intent(this, AudioEditorActivity.class)
+                            .setData(android.net.Uri.parse(s.uri)).putExtra("title", s.title)
+                            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION));
+                    break;
                 case 6:
                 case 7:
                     final boolean move = item.getItemId() == 6;

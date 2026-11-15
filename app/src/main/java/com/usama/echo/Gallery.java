@@ -23,7 +23,7 @@ final class Gallery {
     static Uri save(Context c, File src, String displayName, String mime, String dir) throws IOException {
         if (Build.VERSION.SDK_INT >= 29) {
             Uri collection;
-            if (Environment.DIRECTORY_MUSIC.equals(dir)) {
+            if (Environment.DIRECTORY_MUSIC.equals(dir) || Environment.DIRECTORY_RINGTONES.equals(dir)) {
                 collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
             } else if (Environment.DIRECTORY_PICTURES.equals(dir)) {
                 collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);

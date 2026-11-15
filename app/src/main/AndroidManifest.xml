@@ -58,6 +58,7 @@
 
         <activity android:name=".PlaylistActivity" android:exported="false" />
         <activity android:name=".VideoListActivity" android:exported="false" />
+        <activity android:name=".AudioEditorActivity" android:exported="false" />
         <activity
             android:name=".EditorActivity"
             android:exported="false"

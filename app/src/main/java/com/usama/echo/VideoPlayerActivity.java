@@ -89,6 +89,10 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
             finish();
             return;
         }
+        if (isAudio(getIntent())) { // songs play in Echo's music player, which keeps going in the background
+            playInMusicPlayer();
+            return;
+        }
 
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
@@ -197,6 +201,54 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
         return b.build();
     }
 
+    /** True when what was opened is sound only (an MP3, M4A…), not a video. */
+    private boolean isAudio(Intent i) {
+        String t = i.getType();
+        if (t != null) return t.startsWith("audio/");
+        for (String u : uris) {
+            Uri uri = Uri.parse(u);
+            String mime = null;
+            try {
+                mime = getContentResolver().getType(uri);
+            } catch (Exception ignored) {
+            }
+            if (mime != null) {
+                if (!mime.startsWith("audio/")) return false;
+                continue;
+            }
+            String name = nameWithExt(uri).toLowerCase(Locale.ROOT);
+            int dot = name.lastIndexOf('.');
+            if (dot < 0 || !Drive.AUDIO.contains(name.substring(dot + 1))) return false;
+        }
+        return true;
+    }
+
+    /** Hands audio files to Echo's music player (background play, notification, lock screen). */
+    private void playInMusicPlayer() {
+        List<Library.Song> songs = new ArrayList<>();
+        for (int k = 0; k < uris.size(); k++) {
+            Library.Song s = new Library.Song();
+            s.id = "open_" + Integer.toHexString(uris.get(k).hashCode());
+            s.uri = uris.get(k);
+            s.title = titles.get(k);
+            s.artist = "";
+            s.album = "";
+            s.source = "device";
+            songs.add(s);
+        }
+        try {
+            getContentResolver().takePersistableUriPermission(Uri.parse(uris.get(0)), Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (Exception ignored) {
+        }
+        Hub.play(this, songs, Math.max(0, getIntent().getIntExtra("index", 0)), false);
+        startActivity(new Intent(this, NowPlayingActivity.class));
+        finish();
+    }
+
+    private boolean backgroundPlay() {
+        return getSharedPreferences("video", MODE_PRIVATE).getBoolean("background", false);
+    }
+
     private void updateTitle() {
         int i = player.getCurrentMediaItemIndex();
         if (i >= 0 && i < titles.size()) titleView.setText(titles.get(i));
@@ -276,6 +328,7 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
         m.getMenu().add(0, 3, 2, "Play as audio (keeps playing with screen off)");
         m.getMenu().add(0, 4, 3, "Edit this video");
         m.getMenu().add(0, 5, 4, "Sleep timer");
+        m.getMenu().add(0, 7, 6, "Keep playing when I leave: " + (backgroundPlay() ? "ON" : "off"));
         m.getMenu().add(0, 6, 5, "Repeat: " + (player.getRepeatMode() == Player.REPEAT_MODE_ONE ? "this video"
                 : player.getRepeatMode() == Player.REPEAT_MODE_ALL ? "all" : "off"));
         m.setOnMenuItemClickListener(it -> {
@@ -285,6 +338,11 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
                 case 3: playAsAudio(); break;
                 case 4: edit(); break;
                 case 5: sleepTimer(); break;
+                case 7:
+                    boolean on = !backgroundPlay();
+                    getSharedPreferences("video", MODE_PRIVATE).edit().putBoolean("background", on).apply();
+                    flash(on ? "Sound keeps playing when you leave or lock the phone" : "Video pauses when you leave");
+                    break;
                 case 6:
                     int r = player.getRepeatMode();
                     player.setRepeatMode(r == Player.REPEAT_MODE_OFF ? Player.REPEAT_MODE_ONE
@@ -427,7 +485,9 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
     @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
-        if (player != null && player.isPlaying() && player.getVideoSize().width > 0) enterPip();
+        if (player == null || !player.isPlaying()) return;
+        if (backgroundPlay()) playAsAudio(); // keep the sound going in Echo's music player
+        else if (player.getVideoSize().width > 0) enterPip();
     }
 
     @Override
@@ -605,7 +665,12 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
     @Override
     protected void onStop() {
         super.onStop();
-        if (player != null) player.pause(); // also when the PiP window is closed
+        if (player == null) return;
+        if (backgroundPlay() && player.isPlaying() && !inPip && !isFinishing()) {
+            playAsAudio(); // screen locked or app left: the sound carries on
+            return;
+        }
+        player.pause(); // also when the PiP window is closed
     }
 
     @Override

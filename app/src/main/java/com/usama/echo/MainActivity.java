@@ -651,6 +651,8 @@ public class MainActivity extends Activity {
         actions.setPadding(Ui.dp(this, 14), Ui.dp(this, 6), Ui.dp(this, 14), Ui.dp(this, 6));
         TextView edit = Ui.pill(this, "✂  Edit a video", true);
         edit.setOnClickListener(v -> startActivity(new Intent(this, EditorActivity.class)));
+        TextView audioEd = Ui.pill(this, "🎵  Edit audio", false);
+        audioEd.setOnClickListener(v -> startActivity(new Intent(this, AudioEditorActivity.class)));
         TextView open = Ui.pill(this, "Open file", false);
         open.setOnClickListener(v -> {
             Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
@@ -664,6 +666,7 @@ public class MainActivity extends Activity {
         TextView stream = Ui.pill(this, "Network stream", false);
         stream.setOnClickListener(v -> askStream());
         actions.addView(edit);
+        actions.addView(audioEd, chipMargin());
         actions.addView(open, chipMargin());
         actions.addView(stream, chipMargin());
         hs.addView(actions);
@@ -773,13 +776,22 @@ public class MainActivity extends Activity {
                 }).show();
     }
 
+    private void editAudio(Library.Song s) {
+        startActivity(new Intent(this, AudioEditorActivity.class).setData(Uri.parse(s.uri))
+                .putExtra("title", s.title).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
+    }
+
     private void addMenu(View anchor) {
         PopupMenu m = new PopupMenu(this, anchor);
         m.getMenu().add(0, 1, 0, "Import music");
         m.getMenu().add(0, 2, 1, "New folder");
         m.getMenu().add(0, 3, 2, "Download from YouTube link");
+        m.getMenu().add(0, 4, 3, "Audio editor (cut, trim, join…)");
+        m.getMenu().add(0, 5, 4, "Video editor");
         m.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == 1) showImport();
+            else if (item.getItemId() == 4) startActivity(new Intent(this, AudioEditorActivity.class));
+            else if (item.getItemId() == 5) startActivity(new Intent(this, EditorActivity.class));
             else if (item.getItemId() == 3) Saver.askLink(this, null);
             else Folders.newFolder(this, null, f -> { refresh(); openPlaylist(f); });
             return true;
@@ -826,7 +838,8 @@ public class MainActivity extends Activity {
         m.getMenu().add(0, 2, 1, "Add to queue");
         m.getMenu().add(0, 3, 2, "Add to folder…");
         m.getMenu().add(0, 4, 3, "Search on Google");
-        m.getMenu().add(0, 5, 4, "Remove from Echo");
+        m.getMenu().add(0, 7, 4, "Edit audio (cut, trim…)");
+        m.getMenu().add(0, 5, 5, "Remove from Echo");
         if (Selection.isDrive(s)) m.getMenu().add(0, 6, 5, "Open in Google Drive");
         m.setOnMenuItemClickListener(item -> {
             switch (item.getItemId()) {
@@ -837,6 +850,7 @@ public class MainActivity extends Activity {
                         s.title + (s.artist == null || s.artist.isEmpty() ? " song" : " " + s.artist)), REQ_WEB); break;
                 case 5: Selection.removeFromEcho(this, java.util.Collections.singletonList(s), this::refresh); break;
                 case 6: Selection.openInDrive(this, s); break;
+                case 7: editAudio(s); break;
             }
             return true;
         });
