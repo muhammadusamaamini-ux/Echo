@@ -36,7 +36,7 @@ final class Drive {
     private static final Pattern HREF = Pattern.compile("href=\"([^\"]+)\"");
     private static final Pattern TITLE = Pattern.compile("class=\"flip-entry-title\">(.*?)</div>", Pattern.DOTALL);
     private static final Pattern PAGE_TITLE = Pattern.compile("<title>(.*?)</title>", Pattern.DOTALL);
-    private static final Set<String> AUDIO = new HashSet<>(java.util.Arrays.asList(
+    static final Set<String> AUDIO = new HashSet<>(java.util.Arrays.asList(
             "mp3", "m4a", "aac", "wav", "flac", "ogg", "oga", "opus", "wma", "amr", "3gp", "mka", "weba"));
 
     static String folderId(String text) {
