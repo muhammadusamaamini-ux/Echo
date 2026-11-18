@@ -1,4 +1,4 @@
-name: Build APK
+name: Build Echo (phone APK + Windows EXE)
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,34 +23,112 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build the APK
+      - name: Build the phone app (APK)
         shell: bash
         run: |
           set -o pipefail
           gradle assembleRelease --no-daemon -PbuildNumber=${{ github.run_number }} 2>&1 | tee build.log
+          cp app/build/outputs/apk/release/app-release.apk Echo.apk
 
-      - name: Save the build log if it failed (so Claude can read it)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: Echo.apk
+
+      - name: Save the log if it failed (so Claude can read it)
         if: failure()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: failed-build-${{ github.run_number }}
           name: Failed build ${{ github.run_number }} (log only)
-          body: This build failed. The log is attached. Not an app update.
+          body: This build failed. The logs are attached. Not an app update.
           files: build.log
           prerelease: true
           make_latest: false
 
-      - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk Echo.apk
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: pc
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Version = 1.0.<build number>
+        run: npm version 1.0.${{ github.run_number }} --no-git-tag-version
+
+      - name: Write "What's new" from the commit message
+        run: git log -1 --pretty=%B | grep -v -E '^(Co-Authored-By|Claude-Session):' > build/release-notes.md
+
+      - name: Install
+        run: |
+          set -o pipefail
+          npm install --no-audit --no-fund 2>&1 | tee pc-install.log
+
+      - name: Build the PC app (EXE installer)
+        run: |
+          set -o pipefail
+          npx electron-builder --win --publish never 2>&1 | tee pc-build.log
+          ls dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            pc/dist/Echo-Setup.exe
+            pc/dist/Echo-Setup.exe.blockmap
+            pc/dist/latest.yml
+
+      - name: Save the log if it failed (so Claude can read it)
+        if: failure()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: failed-build-${{ github.run_number }}
+          name: Failed build ${{ github.run_number }} (log only)
+          body: This build failed. The logs are attached. Not an app update.
+          files: |
+            pc/pc-install.log
+            pc/pc-build.log
+          prerelease: true
+          make_latest: false
+
+  release:
+    needs: [ android, windows ]
+    # the phone update still goes out if only the PC build has a problem
+    if: always() && needs.android.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: android
+          path: out
+
+      - uses: actions/download-artifact@v4
+        if: needs.windows.result == 'success'
+        with:
+          name: windows
+          path: out
 
       - name: Write "What's new" from the commit message
         run: git log -1 --pretty=%B | grep -v -E '^(Co-Authored-By|Claude-Session):' > notes.md
 
-      - name: Publish to Releases (download from your phone)
+      - name: Publish to Releases (phone and PC update from here)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: Echo (build ${{ github.run_number }})
           body_path: notes.md
-          files: Echo.apk
+          files: |
+            out/Echo.apk
+            out/Echo-Setup.exe
+            out/Echo-Setup.exe.blockmap
+            out/latest.yml
+          fail_on_unmatched_files: false
           make_latest: true

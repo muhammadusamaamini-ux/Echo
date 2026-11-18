@@ -78,7 +78,8 @@ final class About {
                     "Save as one file, each part as its own file, or as a ringtone (M4A); saved files join your songs"},
             {"🔄  Updates",
                     "⋮ → Check for updates installs the newest build and keeps your music and playlists",
-                    "Echo checks by itself and shows a notification with what's new"},
+                    "Echo checks by itself and shows a notification with what's new",
+                    "Echo for Windows: the same app on your PC (Echo-Setup.exe), updated together with the phone"},
     };
 
     static void show(Activity a) {

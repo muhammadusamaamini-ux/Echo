@@ -1,0 +1,97 @@
+{
+  "name": "echo-pc",
+  "productName": "Echo",
+  "version": "1.0.0",
+  "description": "Echo for Windows: music player, video player, video and audio editor",
+  "main": "src/main.js",
+  "author": "Muhammad Usama",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9",
+    "ffmpeg-static": "^5.2.0",
+    "music-metadata": "^7.14.0"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.usama.echo.pc",
+    "productName": "Echo",
+    "copyright": "Personal use",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "Echo-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Echo"
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "mp3",
+          "m4a",
+          "aac",
+          "wav",
+          "flac",
+          "ogg",
+          "opus",
+          "wma"
+        ],
+        "name": "Audio",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "mp4",
+          "mkv",
+          "webm",
+          "mov",
+          "avi",
+          "m4v",
+          "3gp"
+        ],
+        "name": "Video",
+        "role": "Viewer"
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "muhammadusamaamini-ux",
+        "repo": "Echo"
+      }
+    ],
+    "releaseInfo": {
+      "releaseNotesFile": "build/release-notes.md"
+    }
+  }
+}
