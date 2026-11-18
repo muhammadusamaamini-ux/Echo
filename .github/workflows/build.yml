@@ -63,7 +63,8 @@ jobs:
         run: npm version 1.0.${{ github.run_number }} --no-git-tag-version
 
       - name: Write "What's new" from the commit message
-        run: git log -1 --pretty=%B | grep -v -E '^(Co-Authored-By|Claude-Session):' > build/release-notes.md
+        run: >
+          node -e "const m=require('child_process').execSync('git log -1 --pretty=%B').toString().split(/\r?\n/).filter(l=>!/^(Co-Authored-By|Claude-Session):/.test(l)).join('\n').trim();require('fs').writeFileSync('build/release-notes.md', m || 'Improvements')"
 
       - name: Install
         run: |
