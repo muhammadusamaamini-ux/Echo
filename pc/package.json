@@ -31,7 +31,7 @@
       "node_modules/ffmpeg-static/**"
     ],
     "directories": {
-      "buildResources": "build",
+      "buildResources": "resources",
       "output": "dist"
     },
     "win": {
@@ -43,7 +43,7 @@
           ]
         }
       ],
-      "icon": "build/icon.png",
+      "icon": "resources/icon.png",
       "artifactName": "Echo-Setup.${ext}"
     },
     "nsis": {
@@ -91,7 +91,7 @@
       }
     ],
     "releaseInfo": {
-      "releaseNotesFile": "build/release-notes.md"
+      "releaseNotesFile": "resources/release-notes.md"
     }
   }
 }
