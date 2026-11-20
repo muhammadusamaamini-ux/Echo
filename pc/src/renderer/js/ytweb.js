@@ -73,7 +73,20 @@ async function ytDownload(url, pageTitle) {
   if (opts.length === 1) opts.push({ label: '🎬 Video (MP4)', height: 720 });
   const i = await choose(info.title, opts.map((o) => o.label), 'Save as:');
   if (i < 0) return;
-  startYtJob(clean, info, opts[i]);
+  // you choose the folder (and name); Echo remembers the folder for next time
+  const opt = opts[i];
+  const sys = await api.info();
+  const key = opt.audio ? 'ytAudioDir' : 'ytVideoDir';
+  const dir = L.prefs[key] || (opt.audio ? sys.music : sys.videos) + '\\Echo';
+  const ext = opt.audio ? 'm4a' : 'mp4';
+  const name = info.title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || 'YouTube';
+  const dest = await api.saveDialog({ title: opt.audio ? 'Save the audio' : 'Save the video', defaultPath: dir + '\\' + name + '.' + ext,
+    filters: [opt.audio ? { name: 'Audio (M4A)', extensions: ['m4a'] } : { name: 'Video (MP4)', extensions: ['mp4'] }] });
+  if (!dest) return;
+  L.prefs[key] = dest.replace(/[\\/][^\\/]*$/, '');
+  save();
+  opt.dest = dest;
+  startYtJob(clean, info, opt);
 }
 
 function startYtJob(url, info, opt) {
@@ -86,8 +99,8 @@ function startYtJob(url, info, opt) {
   row.append(el('div.dlhead', name, x), bar, stat);
   dlPanel().appendChild(row);
   YTW.jobs.set(id, { row, stat, bar });
-  toast(opt.audio ? 'Downloading audio… It will appear in your songs.' : 'Downloading video… It will be in Videos › Echo.');
-  api.ytDownload(id, url, { audio: !!opt.audio, height: opt.height, title: info.title }).then(async (r) => {
+  toast('Downloading to ' + (opt.dest || '').replace(/[\\/][^\\/]*$/, ''));
+  api.ytDownload(id, url, { audio: !!opt.audio, height: opt.height, title: info.title, dest: opt.dest }).then(async (r) => {
     YTW.jobs.delete(id);
     if (!row.isConnected) return; // cancelled
     if (!r || !r.ok) {
@@ -106,12 +119,12 @@ function startYtJob(url, info, opt) {
       save();
       if (NAV.view === 'songs' || NAV.view === 'home') refreshView();
       stat.innerHTML = '';
-      stat.append('Saved · in your songs ', el('a', { href: '#', onclick: (e) => { e.preventDefault(); playList([song(s.id) || s], 0); } }, 'Play'));
+      stat.append('Saved · in your songs ', el('a', { href: '#', onclick: (e) => { e.preventDefault(); api.showInFolder(r.path); } }, 'Show in folder'), ' · ', el('a', { href: '#', onclick: (e) => { e.preventDefault(); playList([song(s.id) || s], 0); } }, 'Play'));
     } else {
       VIDS = null; // the Videos page shows it next time
       const v = { path: r.path, url: await api.fileUrl(r.path), name: r.path.split(/[\\/]/).pop() };
       stat.innerHTML = '';
-      stat.append('Saved to Videos › Echo ', el('a', { href: '#', onclick: (e) => { e.preventDefault(); newTab({ view: 'video', arg: { list: [v], i: 0 } }); } }, 'Watch'),
+      stat.append('Saved ', el('a', { href: '#', onclick: (e) => { e.preventDefault(); newTab({ view: 'video', arg: { list: [v], i: 0 } }); } }, 'Watch'),
         ' · ', el('a', { href: '#', onclick: (e) => { e.preventDefault(); api.showInFolder(r.path); } }, 'Show in folder'));
     }
     setTimeout(() => { row.remove(); tidyDl(); }, 30000);

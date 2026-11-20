@@ -116,8 +116,14 @@ async function download(id, url, choice, onProgress) {
   }
   const base = safeName(choice.title || 'YouTube ' + id);
   const ext = path.extname(got) || want;
-  let dest = path.join(dir, base + ext);
-  for (let i = 2; fs.existsSync(dest); i++) dest = path.join(dir, `${base} (${i})${ext}`);
+  let dest;
+  if (choice.dest) { // where you chose in "Save as" (Windows already asked about replacing a file with that name)
+    dest = path.extname(choice.dest).toLowerCase() === ext.toLowerCase() ? choice.dest : choice.dest.replace(/\.[^.\\/]*$/, '') + ext;
+    try { fs.mkdirSync(path.dirname(dest), { recursive: true }); if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (e) { /* ignore */ }
+  } else {
+    dest = path.join(dir, base + ext);
+    for (let i = 2; fs.existsSync(dest); i++) dest = path.join(dir, `${base} (${i})${ext}`);
+  }
   try { fs.renameSync(got, dest); } catch (e) { fs.copyFileSync(got, dest); }
   try { fs.rmSync(work, { recursive: true, force: true }); } catch (e) { /* ignore */ }
   return { ok: true, path: dest };
