@@ -214,6 +214,45 @@ ipcMain.handle('ff:export', async (e, job) => {
   }
 });
 
+// ---------- phone ⇄ PC sync (files go to your private GitHub data repository) ----------
+const crypto = require('crypto');
+ipcMain.handle('sync:hash', (e, p) => new Promise((resolve) => {
+  const h = crypto.createHash('sha1');
+  const s = fs.createReadStream(p);
+  s.on('data', (d) => h.update(d));
+  s.on('error', () => resolve(null));
+  s.on('end', () => resolve(h.digest('hex')));
+}));
+ipcMain.handle('sync:size', (e, p) => { try { return fs.statSync(p).size; } catch (err) { return -1; } });
+function gh(cfg, method, apiPath, body, accept) {
+  return fetch('https://api.github.com/repos/' + cfg.repo + apiPath, {
+    method, cache: 'no-store',
+    headers: { Authorization: 'Bearer ' + cfg.token, Accept: accept || 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28',
+      ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+/** Uploads a music file once (files are named by their content, so the same song is never stored twice). */
+ipcMain.handle('sync:upload', async (e, cfg, remotePath, localPath) => {
+  const head = await gh(cfg, 'GET', '/contents/' + remotePath + '?ref=' + encodeURIComponent(cfg.branch || 'main'));
+  if (head.ok) return { ok: true, existed: true };
+  const data = fs.readFileSync(localPath).toString('base64');
+  const r = await gh(cfg, 'PUT', '/contents/' + remotePath, { message: 'Echo sync: add music file', content: data, branch: cfg.branch || undefined });
+  if (r.ok || r.status === 422) return { ok: true };
+  return { ok: false, status: r.status, error: (await r.text()).slice(0, 300) };
+});
+/** Downloads a synced music file into Music\Echo (or wherever dest is). */
+ipcMain.handle('sync:download', async (e, cfg, remotePath, dest) => {
+  const r = await gh(cfg, 'GET', '/contents/' + remotePath + '?ref=' + encodeURIComponent(cfg.branch || 'main'), null, 'application/vnd.github.raw');
+  if (!r.ok) return { ok: false, status: r.status };
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  let out = dest, n = 1;
+  while (fs.existsSync(out)) out = dest.replace(/(\.[^.\\/]+)$/, ` (${n++})$1`);
+  fs.writeFileSync(out, Buffer.from(await r.arrayBuffer()));
+  return { ok: true, path: out, url: pathToFileURL(out).href };
+});
+ipcMain.handle('sync:musicDir', () => path.join(app.getPath('music'), 'Echo'));
+
 // ---------- updates ----------
 let updater = null;
 let lastInfo = null;

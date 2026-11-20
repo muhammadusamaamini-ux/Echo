@@ -26,6 +26,8 @@ final class Library {
     static final class Song {
         String id, title, artist, album, uri, source; // source: "file" (copied into the app), "device" or "drive" (played online)
         long duration, added;
+        String k;  // content hash (sync recognises the same song on every device)
+        long size;
 
         String subtitle() {
             String a = (artist == null || artist.isEmpty() || "<unknown>".equals(artist)) ? "Unknown artist" : artist;
@@ -49,6 +51,8 @@ final class Library {
         boolean hidden;     // hidden from the Playlists list (see "Hidden folders")
         final List<String> songIds = new ArrayList<>();
         final List<YtItem> ytItems = new ArrayList<>();
+        final List<String> pendingKeys = new ArrayList<>(); // synced songs not on this phone yet
+        String remoteSrc; // where the PC version gets this folder from (kept for the PC)
 
         String subtitle() {
             return subtitle(0);
@@ -81,6 +85,10 @@ final class Library {
         ctx = c;
         file = new File(c.getFilesDir(), "library.json");
         load();
+    }
+
+    Context context() {
+        return ctx;
     }
 
     File musicDir() {
@@ -429,6 +437,8 @@ final class Library {
                 s.source = o.optString("source", "file");
                 s.duration = o.optLong("duration", 0);
                 s.added = o.optLong("added", 0);
+                s.k = o.optString("k", null);
+                s.size = o.optLong("size", 0);
                 addSong(s);
             }
             JSONArray rc = root.optJSONArray("recent");
@@ -446,6 +456,9 @@ final class Library {
                 p.driveRoot = o.optString("driveRoot", null);
                 p.driveName = o.optString("driveName", null);
                 p.hidden = o.optBoolean("hidden", false);
+                p.remoteSrc = o.optString("remoteSrc", null);
+                JSONArray pk = o.optJSONArray("pendingKeys");
+                if (pk != null) for (int j = 0; j < pk.length(); j++) p.pendingKeys.add(pk.getString(j));
                 JSONArray ids = o.optJSONArray("songs");
                 if (ids != null) for (int j = 0; j < ids.length(); j++) p.songIds.add(ids.getString(j));
                 JSONArray yt = o.optJSONArray("yt");
@@ -478,6 +491,8 @@ final class Library {
                 o.put("source", s.source);
                 o.put("duration", s.duration);
                 o.put("added", s.added);
+                if (s.k != null) o.put("k", s.k);
+                if (s.size > 0) o.put("size", s.size);
                 ss.put(o);
             }
             root.put("songs", ss);
@@ -493,6 +508,8 @@ final class Library {
                 if (p.driveRoot != null) o.put("driveRoot", p.driveRoot);
                 if (p.driveName != null) o.put("driveName", p.driveName);
                 if (p.hidden) o.put("hidden", true);
+                if (p.remoteSrc != null) o.put("remoteSrc", p.remoteSrc);
+                if (!p.pendingKeys.isEmpty()) o.put("pendingKeys", new JSONArray(p.pendingKeys));
                 JSONArray ids = new JSONArray();
                 for (String id : p.songIds) ids.put(id);
                 o.put("songs", ids);
@@ -519,6 +536,7 @@ final class Library {
                 file.delete();
                 tmp.renameTo(file);
             }
+            if (!Sync.applying) Sync.later(ctx, 20000); // share the change with your other device
         } catch (Exception ignored) {
         }
     }

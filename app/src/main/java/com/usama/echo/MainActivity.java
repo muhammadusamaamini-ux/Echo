@@ -177,10 +177,13 @@ public class MainActivity extends Activity {
     private void mainMenu(View anchor) {
         PopupMenu m = new PopupMenu(this, anchor);
         m.getMenu().add(0, 3, 0, "Hidden folders");
+        m.getMenu().add(0, 4, 0, "Sync with PC  ·  " + (Sync.on(this) ? Sync.status : "off"));
         m.getMenu().add(0, 1, 1, "Check for updates");
         m.getMenu().add(0, 2, 2, "About & features (build " + Updater.installedBuild(this) + ")");
         m.setOnMenuItemClickListener(item -> {
-            if (item.getItemId() == 3) {
+            if (item.getItemId() == 4) {
+                Sync.show(this);
+            } else if (item.getItemId() == 3) {
                 Folders.showHidden(this, this::refresh);
             } else if (item.getItemId() == 1) {
                 Updater.check(this);
@@ -820,6 +823,26 @@ public class MainActivity extends Activity {
         if (viewToggle != null) ListGrid.syncButton(viewToggle, this);
         refresh();
         syncDrive();
+        Sync.onChanged = this::refresh;
+        Sync.later(this, 1500);
+        ticker.removeCallbacks(tick);
+        ticker.postDelayed(tick, 3 * 60 * 1000L);
+    }
+
+    private final android.os.Handler ticker = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable tick = new Runnable() { // sync every few minutes while Echo is open
+        @Override
+        public void run() {
+            Sync.later(MainActivity.this, 0);
+            ticker.postDelayed(this, 3 * 60 * 1000L);
+        }
+    };
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        ticker.removeCallbacks(tick);
+        if (Sync.onChanged != null) Sync.onChanged = null;
     }
 
     @Override

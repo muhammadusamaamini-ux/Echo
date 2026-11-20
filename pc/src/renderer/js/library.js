@@ -32,6 +32,7 @@ let saveTimer = null;
 function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => api.saveLibrary(L), 250);
+  if (typeof scheduleSync === 'function' && !SY.busy) scheduleSync(); // share the change with your other device
 }
 function saveNow() { clearTimeout(saveTimer); return api.saveLibrary(L); }
 

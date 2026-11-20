@@ -26,6 +26,10 @@ const FEATURES = [
     'Export 480p, 720p, 1080p or original MP4; Extract audio as MP3; Save frame as a picture']],
   ['🎚️ Audio editor', ['Waveform: drag the edges to trim, click to jump', 'Split, cut out a section, join several songs (or the sound of videos)',
     'Speed, voice / pitch, volume up to 300%, fade in and out, mix with background music', 'Save as MP3, M4A or WAV — one file or each part separately; saved audio joins your songs']],
+  ['🔁 Phone ⇄ PC sync', ['Sidebar → Sync: connect your private Echo-Data repository on GitHub (the same way as Book Shelf)',
+    'Folders, playlists, hidden folders, Google Drive folders and YouTube playlists are the same on your phone and PC',
+    'Songs from your phone or PC are uploaded once and downloaded on the other device (to Music › Echo), so they play offline',
+    'Removing a song or folder on one device removes it on the other; syncs automatically after changes and every few minutes']],
   ['🔄 Updates', ['About & updates → Check for updates', 'Echo checks by itself and shows a Windows notification with what\'s new',
     'The phone and PC versions are updated together']],
 ];
@@ -141,6 +145,9 @@ document.addEventListener('drop', async (e) => {
   $$('#side .nav[data-go]').forEach((n) => n.addEventListener('click', () => go(n.dataset.go)));
   $('#importBtn').onclick = showImport;
   $('#aboutBtn').onclick = about;
+  $('#syncBtn').onclick = openSyncSettings;
+  if (syncCfg()) { setSyncState('idle', L.prefs.syncLast ? 'Last synced ' + new Date(L.prefs.syncLast).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sync'); scheduleSync(2500); }
+  setInterval(() => { if (syncCfg()) syncNow(false); }, 3 * 60 * 1000);
   renderSideFolders();
   go('home');
   restoreState();
