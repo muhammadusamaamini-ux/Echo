@@ -5,16 +5,12 @@ const main = $('#main');
 const NAV = { view: 'home', arg: null };
 const SEL = { ids: new Set(), list: [], anchor: -1, folder: null };
 
+/** Opens a page in the current tab (tabs.js). */
 function go(view, arg) {
-  if (view === 'ytweb') { focusYouTube(); return; } // YouTube opens in its own tab
-  if (typeof switchTab === 'function' && TABS.active !== 'echo') switchTab('echo');
   if (typeof leavingEditor === 'function' && !leavingEditor(view)) return;
-  NAV.view = view; NAV.arg = arg;
   clearSelection(true);
-  $$('#side .nav[data-go]').forEach((n) => n.classList.toggle('on', n.dataset.go === view));
-  render();
+  tabNavigate(view, arg);
   main.scrollTop = 0;
-  if (typeof renderTabBar === 'function') renderTabBar();
 }
 function openFolder(id) {
   const p = playlist(id);
@@ -36,6 +32,7 @@ function render() {
   else if (v === 'videos') videosView(NAV.arg);
   else if (v === 'veditor') videoEditorView(NAV.arg);
   else if (v === 'aeditor') audioEditorView(NAV.arg);
+  // 'ytweb' (YouTube) and 'video' (the player) are shown by tabs.js
   markPlaying();
 }
 

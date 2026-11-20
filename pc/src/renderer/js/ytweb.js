@@ -17,7 +17,7 @@ function openYouTube(urlOrSearch) {
     const t = String(urlOrSearch).trim();
     url = /^https?:\/\//.test(t) ? t : 'https://www.youtube.com/results?search_query=' + encodeURIComponent(t);
   }
-  newYtTab(url);
+  go('ytweb', url);
 }
 
 /** One YouTube page (with its own back/forward and Download button) for a tab. */
@@ -49,7 +49,7 @@ function buildYtPane(startUrl, tab) {
   wv.addEventListener('did-navigate-in-page', update); // YouTube changes pages without reloading
   wv.addEventListener('page-title-updated', (e) => {
     update();
-    tab.title = (e.title || 'YouTube').replace(/^\(\d+\)\s*/, '').replace(/ - YouTube$/, '') || 'YouTube';
+    tab.webTitle = (e.title || 'YouTube').replace(/^\(\d+\)\s*/, '').replace(/ - YouTube$/, '') || 'YouTube';
     renderTabBar();
   });
   // music in Echo pauses while a YouTube video plays
@@ -111,7 +111,7 @@ function startYtJob(url, info, opt) {
       VIDS = null; // the Videos page shows it next time
       const v = { path: r.path, url: await api.fileUrl(r.path), name: r.path.split(/[\\/]/).pop() };
       stat.innerHTML = '';
-      stat.append('Saved to Videos › Echo ', el('a', { href: '#', onclick: (e) => { e.preventDefault(); openVideo([v], 0); } }, 'Watch'),
+      stat.append('Saved to Videos › Echo ', el('a', { href: '#', onclick: (e) => { e.preventDefault(); newTab({ view: 'video', arg: { list: [v], i: 0 } }); } }, 'Watch'),
         ' · ', el('a', { href: '#', onclick: (e) => { e.preventDefault(); api.showInFolder(r.path); } }, 'Show in folder'));
     }
     setTimeout(() => { row.remove(); tidyDl(); }, 30000);

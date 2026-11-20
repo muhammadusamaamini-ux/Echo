@@ -1,118 +1,198 @@
-// Tabs along the top, like Chrome (and like Book Shelf's open books): the Echo tab (library, editors…),
-// a tab for every YouTube page and a tab for every video player. Switching keeps each tab as you left it.
+// Tabs along the top, like File Explorer and Chrome: every tab is its own Echo window. Whatever you open
+// in a tab (Home, Library, a folder, Videos, a video player, YouTube…) shows in that tab, with its name.
+// + opens a new Home tab; right-click a tab to duplicate it or close others.
 'use strict';
 
-const TABS = { list: [{ id: 'echo', kind: 'echo', title: 'Echo' }], active: 'echo', seq: 0, history: ['echo'] };
+const TABS = { list: [], active: null, seq: 0 };
 
+function makeTab(nav) {
+  return { id: 't' + (++TABS.seq), nav: { view: nav.view, arg: nav.arg }, back: [], scroll: 0, pane: null, webTitle: '' };
+}
 const tabById = (id) => TABS.list.find((t) => t.id === id);
 const activeTab = () => tabById(TABS.active);
+const navOf = (t) => (t.id === TABS.active ? NAV : t.nav);
+
+function tabTitle(t) {
+  const n = navOf(t);
+  const a = n.arg;
+  switch (n.view) {
+    case 'home': return 'Home';
+    case 'search': return 'Search';
+    case 'library': return 'Library';
+    case 'songs': return 'Songs';
+    case 'folder': case 'youtube': return (playlist(a) || {}).name || 'Folder';
+    case 'videos': return a && a.folder ? a.folder.split(/[\\/]/).pop() : 'Videos';
+    case 'veditor': return 'Video editor';
+    case 'aeditor': return 'Audio editor';
+    case 'ytweb': return t.webTitle || 'YouTube';
+    case 'video': return (a && a.list && a.list[a.i] && a.list[a.i].name) || 'Video';
+    default: return 'Echo';
+  }
+}
+const TAB_ICONS = { home: 'home', search: 'search', library: 'library', songs: 'music', folder: 'folder', youtube: 'yt', ytweb: 'yt',
+  videos: 'movie', video: 'movie', veditor: 'cut', aeditor: 'wave' };
 
 function renderTabBar() {
   const bar = $('#tabbar');
   if (!bar) return;
   bar.innerHTML = '';
   for (const t of TABS.list) {
-    const ic = t.kind === 'yt' ? icon('yt') : t.kind === 'video' ? icon('movie') : el('img', { src: 'icon.png', alt: '' });
-    const node = el('div.tab' + (t.id === TABS.active ? '.on' : '') + '.k-' + t.kind, {
-      title: t.title,
-      onclick: () => switchTab(t.id),
-      onauxclick: (e) => { if (e.button === 1 && t.kind !== 'echo') { e.preventDefault(); closeTab(t.id); } },
-    }, ic, el('span.tt', t.kind === 'echo' ? 'Echo' : t.title || (t.kind === 'yt' ? 'YouTube' : 'Video')));
-    if (t.kind !== 'echo') node.appendChild(el('button.tx', { title: 'Close tab (Ctrl+W)', onclick: (e) => { e.stopPropagation(); closeTab(t.id); } }, icon('close')));
+    const view = navOf(t).view;
+    const node = el('div.tab' + (t.id === TABS.active ? '.on' : '') + (view === 'ytweb' || view === 'youtube' ? '.k-yt' : ''), {
+      title: tabTitle(t),
+      onmousedown: (e) => { if (e.button === 0) switchTab(t.id); },
+      onauxclick: (e) => { if (e.button === 1) { e.preventDefault(); closeTab(t.id); } },
+      oncontextmenu: (e) => tabMenu(e, t),
+    }, icon(TAB_ICONS[view] || 'music'), el('span.tt', tabTitle(t)),
+    el('button.tx', { title: 'Close tab (Ctrl+W)', onmousedown: (e) => e.stopPropagation(), onclick: (e) => { e.stopPropagation(); closeTab(t.id); } }, icon('close')));
     bar.appendChild(node);
   }
-  bar.appendChild(el('button.tabnew', { title: 'New YouTube tab (Ctrl+T)', onclick: () => newYtTab() }, icon('add')));
-  // the sidebar shows where you are
+  bar.appendChild(el('button.tabnew', { title: 'New tab (Ctrl+T)', onclick: () => newTab() }, icon('add')));
+  $$('#side .nav[data-go]').forEach((n) => n.classList.toggle('on', n.dataset.go === NAV.view));
+}
+
+function tabMenu(e, t) {
+  const i = TABS.list.indexOf(t);
+  menu(e, [
+    ['New tab', () => newTab()],
+    ['Duplicate', () => duplicateTab(t)],
+    '-',
+    ['Close', () => closeTab(t.id)],
+    TABS.list.length > 1 ? ['Close other tabs', () => TABS.list.filter((x) => x !== t).forEach((x) => closeTab(x.id))] : null,
+    i < TABS.list.length - 1 ? ['Close tabs to the right', () => TABS.list.slice(i + 1).forEach((x) => closeTab(x.id))] : null,
+  ]);
+}
+
+/** Where a tab is now (for Back and Duplicate). */
+function currentNav(t) {
+  if (t.id !== TABS.active) return { view: t.nav.view, arg: t.nav.arg };
+  if (NAV.view === 'video' && V.list && V.list.length) return { view: 'video', arg: { list: V.list, i: V.i } };
+  if (NAV.view === 'ytweb' && t.pane) {
+    const wv = $('webview', t.pane);
+    try { return { view: 'ytweb', arg: wv.getURL() || NAV.arg }; } catch (e) { /* not loaded yet */ }
+  }
+  return { view: NAV.view, arg: NAV.arg };
+}
+
+/** Takes down what only this page needs (the video player, the YouTube page). */
+function teardown(t) {
+  if (NAV.view === 'video') unmountVideo(true);
+  if (t.pane) { t.pane.remove(); t.pane = null; t.webTitle = ''; }
+}
+
+/** Shows the active tab's page. */
+function showPage(t) {
+  if (NAV.view === 'ytweb') {
+    main.innerHTML = '';
+    if (!t.pane) {
+      t.pane = buildYtPane(NAV.arg || 'https://www.youtube.com/', t);
+      $('#content').appendChild(t.pane);
+    }
+    t.pane.classList.remove('off');
+  } else if (NAV.view === 'video') {
+    main.innerHTML = '';
+    mountVideo(NAV.arg.list, NAV.arg.i);
+  } else render();
+  renderTabBar();
+}
+
+/** Opens a page in the current tab (what go() does). */
+function tabNavigate(view, arg) {
   const t = activeTab();
-  $$('#side .nav[data-go]').forEach((n) => n.classList.toggle('on', t.kind === 'yt' ? n.dataset.go === 'ytweb' : t.kind === 'echo' && n.dataset.go === NAV.view));
+  const here = currentNav(t);
+  if (!(here.view === view && here.arg === arg)) t.back.push(here);
+  if (t.back.length > 30) t.back.shift();
+  teardown(t);
+  NAV.view = view; NAV.arg = arg;
+  showPage(t);
 }
 
-function leaveTab(t) {
-  if (!t) return;
-  if (t.kind === 'video') {
-    if (V.list && V.list.length) { t.list = V.list; t.i = V.i; }
-    unmountVideo(true); // remembers where you were; it continues from there when you come back
-  } else if (t.kind === 'yt' && t.pane) t.pane.classList.add('off');
-}
-
-function enterTab(t) {
-  if (t.kind === 'video') mountVideo(t.list, t.i);
-  else if (t.kind === 'yt' && t.pane) t.pane.classList.remove('off');
+/** Back to the previous page in this tab (closing a video player does this). */
+function tabBack() {
+  const t = activeTab();
+  const prev = t.back.pop() || { view: 'home', arg: null };
+  teardown(t);
+  NAV.view = prev.view; NAV.arg = prev.arg;
+  clearSelection(true);
+  showPage(t);
 }
 
 function switchTab(id) {
-  const t = tabById(id);
-  if (!t) return;
-  if (id !== TABS.active) {
-    leaveTab(activeTab());
-    TABS.active = id;
-    TABS.history = TABS.history.filter((x) => x !== id).concat(id);
-    enterTab(t);
+  if (id === TABS.active || !tabById(id)) return;
+  const cur = activeTab();
+  if (cur) {
+    cur.scroll = main.scrollTop;
+    cur.nav = currentNav(cur);
+    if (NAV.view === 'video') unmountVideo(true); // it continues from the same moment when you come back
+    if (cur.pane) cur.pane.classList.add('off');
+    clearSelection(true);
   }
-  renderTabBar();
+  TABS.active = id;
+  const t = activeTab();
+  NAV.view = t.nav.view; NAV.arg = t.nav.arg;
+  showPage(t);
+  main.scrollTop = t.scroll;
 }
 
-function closeTab(id) {
-  const t = tabById(id);
-  if (!t || t.kind === 'echo') return;
-  if (TABS.active === id) {
-    if (t.kind === 'video') unmountVideo(true);
-  }
-  if (t.pane) t.pane.remove(); // the YouTube page goes away with it
-  TABS.list.splice(TABS.list.indexOf(t), 1);
-  TABS.history = TABS.history.filter((x) => x !== id);
-  if (TABS.active === id) {
-    TABS.active = null;
-    const back = TABS.history[TABS.history.length - 1] || 'echo';
-    TABS.active = back;
-    enterTab(tabById(back));
-  }
-  renderTabBar();
-}
-
-function addTab(t) {
-  t.id = 't' + (++TABS.seq);
+/** A new tab (Home unless told otherwise), next to the current one. */
+function newTab(nav) {
+  const t = makeTab(nav || { view: 'home', arg: null });
   const i = TABS.list.indexOf(activeTab());
-  TABS.list.splice(i + 1, 0, t); // opens next to the current tab, like Chrome
+  TABS.list.splice(i < 0 ? TABS.list.length : i + 1, 0, t);
   switchTab(t.id);
   return t;
 }
 
-/** A new YouTube tab (url optional). */
-function newYtTab(url) {
-  const t = { kind: 'yt', title: 'YouTube' };
-  t.pane = buildYtPane(url || 'https://www.youtube.com/', t);
-  t.pane.classList.add('off');
-  $('#content').appendChild(t.pane);
-  return addTab(t);
+function duplicateTab(t) {
+  const nav = currentNav(t);
+  const back = t.back.slice();
+  const copy = newTab(nav);
+  copy.back = back;
+  return copy;
 }
 
-/** Sidebar → YouTube: back to your last YouTube tab, or a new one. */
-function focusYouTube() {
-  const last = [...TABS.history].reverse().map(tabById).find((t) => t && t.kind === 'yt');
-  if (last) switchTab(last.id); else newYtTab();
+function closeTab(id) {
+  const t = tabById(id);
+  if (!t) return;
+  if (TABS.list.length === 1) { // the last tab: go Home instead, Echo stays open
+    teardown(t);
+    t.back = [];
+    NAV.view = 'home'; NAV.arg = null;
+    showPage(t);
+    return;
+  }
+  const i = TABS.list.indexOf(t);
+  if (TABS.active === id) {
+    if (NAV.view === 'video') { if (V.savePos) V.savePos(); unmountVideo(true); }
+    if (t.pane) t.pane.remove();
+    TABS.list.splice(i, 1);
+    const next = TABS.list[Math.min(i, TABS.list.length - 1)];
+    TABS.active = next.id;
+    NAV.view = next.nav.view; NAV.arg = next.nav.arg;
+    showPage(next);
+    main.scrollTop = next.scroll;
+  } else {
+    if (t.pane) t.pane.remove();
+    TABS.list.splice(i, 1);
+    renderTabBar();
+  }
 }
 
-/** Every video you open gets its own tab. */
-function openVideo(list, i) {
-  return addTab({ kind: 'video', list, i, title: (list[i] && list[i].name) || 'Video' });
-}
+/** A video opens in the current tab, and the tab takes its name. */
+function openVideo(list, i) { go('video', { list, i }); }
 
-/** Closing the player (← or Esc) closes its tab. */
+/** Closing the player (← or Esc) goes back to where you were in this tab. */
 function closeVideo(silent) {
-  const t = activeTab();
-  if (t && t.kind === 'video') {
-    if (V.savePos) V.savePos();
-    const v = vid();
-    if (L.prefs.videoBackground && v && !v.paused && !silent) { playVideoAsAudio(); return; }
-    closeTab(t.id);
-  } else unmountVideo(silent);
+  if (NAV.view !== 'video') { unmountVideo(silent); return; }
+  if (V.savePos) V.savePos();
+  const v = vid();
+  if (L.prefs.videoBackground && v && !v.paused && !silent) { playVideoAsAudio(); return; }
+  tabBack();
 }
 
 /** The player moved to another video in the list: the tab's name follows. */
-function onVideoItem(item) {
-  const t = activeTab();
-  if (t && t.kind === 'video') { t.title = item.name; t.list = V.list; t.i = V.i; renderTabBar(); }
+function onVideoItem() {
+  if (NAV.view === 'video') { NAV.arg = { list: V.list, i: V.i }; renderTabBar(); }
 }
 
 function cycleTab(d) {
@@ -120,14 +200,19 @@ function cycleTab(d) {
   switchTab(TABS.list[(i + d + TABS.list.length) % TABS.list.length].id);
 }
 
-// links that YouTube opens "in a new tab" (Ctrl+click, middle-click) become Echo tabs
-api.onWebNewTab((url) => newYtTab(url));
+// the first tab
+(() => { const t = makeTab({ view: 'home', arg: null }); TABS.list.push(t); TABS.active = t.id; })();
+
+// links YouTube opens "in a new tab" (Ctrl+click, middle-click) become Echo tabs
+api.onWebNewTab((url) => newTab({ view: 'ytweb', arg: url }));
 
 document.addEventListener('keydown', (e) => {
+  if (e.altKey && e.key === 'ArrowLeft' && NAV.view !== 'ytweb') { e.preventDefault(); tabBack(); return; }
   if (!(e.ctrlKey || e.metaKey)) return;
-  if (e.key === 't' || e.key === 'T') { e.preventDefault(); e.stopImmediatePropagation(); newYtTab(); }
-  else if (e.key === 'w' || e.key === 'W') { e.preventDefault(); e.stopImmediatePropagation(); closeTab(TABS.active); }
-  else if (e.key === 'Tab') { e.preventDefault(); e.stopImmediatePropagation(); cycleTab(e.shiftKey ? -1 : 1); }
+  const k = e.key.toLowerCase();
+  if (k === 't') { e.preventDefault(); e.stopImmediatePropagation(); newTab(); }
+  else if (k === 'w') { e.preventDefault(); e.stopImmediatePropagation(); closeTab(TABS.active); }
+  else if (k === 'tab') { e.preventDefault(); e.stopImmediatePropagation(); cycleTab(e.shiftKey ? -1 : 1); }
 }, true);
 
 // ---------- the window's ✕: ask what to close ----------
@@ -138,9 +223,11 @@ api.onCloseAsk(async () => {
   try {
     const t = activeTab();
     const opts = [];
-    if (t.kind !== 'echo') opts.push([(t.kind === 'yt' ? '▶️ Close this YouTube tab' : '🎬 Close this video') + ' — ' + t.title, () => closeVideoOrTab(t)]);
-    const others = TABS.list.filter((x) => x.kind !== 'echo');
-    if (others.length > 1 || (others.length === 1 && others[0] !== t)) opts.push([`🗂️ Close all ${others.length} tabs (keep Echo open)`, () => others.forEach((x) => closeTab(x.id))]);
+    if (NAV.view === 'video') opts.push(['🎬 Close this video — ' + tabTitle(t), () => closeVideo(true)]);
+    if (TABS.list.length > 1) {
+      opts.push(['🗂️ Close this tab — ' + tabTitle(t), () => closeTab(t.id)]);
+      opts.push([`🗂️ Close the other ${TABS.list.length - 1} tab${TABS.list.length > 2 ? 's' : ''}`, () => TABS.list.filter((x) => x !== t).forEach((x) => closeTab(x.id))]);
+    }
     if (!$('#player').classList.contains('off')) opts.push(['🎵 Stop the music — ' + ($('#pTitle').textContent || 'song'), () => closePlayer()]);
     opts.push(['➖ Minimize Echo (music keeps playing)', () => api.minimizeApp()]);
     opts.push(['⏻ Quit Echo completely', () => quitEcho()]);
@@ -151,13 +238,8 @@ api.onCloseAsk(async () => {
   }
 });
 
-function closeVideoOrTab(t) {
-  if (t.kind === 'video' && TABS.active === t.id) closeVideo(true);
-  else closeTab(t.id);
-}
-
 function quitEcho() {
-  try { if (typeof V !== 'undefined' && V.savePos && $('#vplayer')) V.savePos(); } catch (e) { /* ignore */ }
+  try { if (NAV.view === 'video' && V.savePos) V.savePos(); } catch (e) { /* ignore */ }
   try { api.saveLibrary(L); } catch (e) { /* ignore */ }
   setTimeout(() => api.quitApp(), 150);
 }
