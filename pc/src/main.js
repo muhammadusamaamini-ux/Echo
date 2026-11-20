@@ -7,6 +7,7 @@ const { pathToFileURL } = require('url');
 const drive = require('./lib/drive');
 const scan = require('./lib/scan');
 const ff = require('./lib/ffmpeg');
+const ytdl = require('./lib/ytdl');
 
 let win = null;
 let pendingFiles = [];
@@ -46,9 +47,17 @@ function createWindow() {
     backgroundColor: '#0b0b1e', title: 'Echo', autoHideMenuBar: true,
     icon: path.join(__dirname, 'renderer', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false,
-      webviewTag: false, autoplayPolicy: 'no-user-gesture-required' },
+      webviewTag: true, autoplayPolicy: 'no-user-gesture-required' },
   });
   Menu.setApplicationMenu(null);
+  // YouTube inside Echo: links that open a new window open in the same page instead
+  win.webContents.on('did-attach-webview', (ev, wc) => {
+    wc.setWindowOpenHandler(({ url }) => {
+      if (/^https?:\/\/([\w-]+\.)*(youtube\.com|youtu\.be|google\.com|accounts\.google\.com)\//.test(url)) wc.loadURL(url);
+      else if (/^https?:/.test(url)) shell.openExternal(url);
+      return { action: 'deny' };
+    });
+  });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) shell.openExternal(url);
@@ -177,6 +186,10 @@ ipcMain.handle('yt:oembed', async (e, ids) => {
 });
 
 // ---------- FFmpeg ----------
+// YouTube downloads (the in-app YouTube page's Download button)
+ipcMain.handle('ytdl:info', (e, url) => ytdl.info(url));
+ipcMain.handle('ytdl:download', (e, id, url, choice) => ytdl.download(id, url, choice, (p) => { if (win && !win.isDestroyed()) win.webContents.send('ytdl:progress', id, p); }));
+ipcMain.handle('ytdl:cancel', (e, id) => ytdl.cancel(id));
 ipcMain.handle('ff:probe', (e, p) => ff.probe(p));
 ipcMain.handle('ff:thumb', async (e, p) => {
   const key = Buffer.from(p).toString('base64').replace(/[/+=]/g, '').slice(-60);

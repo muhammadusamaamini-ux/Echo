@@ -92,6 +92,15 @@
     ],
     "releaseInfo": {
       "releaseNotesFile": "resources/release-notes.md"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin",
+        "filter": [
+          "yt-dlp.exe"
+        ]
+      }
+    ]
   }
 }

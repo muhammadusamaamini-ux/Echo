@@ -71,6 +71,12 @@ jobs:
           set -o pipefail
           npm install --no-audit --no-fund 2>&1 | tee pc-install.log
 
+      - name: Get yt-dlp (for YouTube downloads on the PC)
+        run: |
+          mkdir -p bin
+          curl -sSfL -o bin/yt-dlp.exe https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
+          ls -l bin
+
       - name: Build the PC app (EXE installer)
         run: |
           set -o pipefail

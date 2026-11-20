@@ -234,3 +234,22 @@ input[type=range].fill { background: linear-gradient(90deg, var(--accent) var(--
 .part { flex: none; min-width: 140px; padding: 10px 12px; border-radius: 12px; cursor: pointer; border: 2px solid transparent; }
 .part.on { border-color: var(--glow); }
 kbd { background: rgba(255, 255, 255, .12); border-radius: 5px; padding: 1px 6px; font-size: 12px; }
+
+/* YouTube inside Echo */
+#main.webmode { padding: 0; overflow: hidden; }
+.webwrap { display: flex; flex-direction: column; height: 100%; }
+.webbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line, rgba(255,255,255,.08)); }
+.webbar .addr { flex: 1; min-width: 0; }
+.webbar .dlbtn { white-space: nowrap; }
+webview.ytweb { flex: 1; width: 100%; border: 0; background: #0f0f0f; }
+#dlPanel { position: fixed; right: 18px; bottom: 104px; width: 340px; max-height: 50vh; overflow-y: auto; z-index: 60;
+  background: rgba(20,22,40,.96); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 8px 12px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.dlrow { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.07); }
+.dlrow:last-child { border-bottom: 0; }
+.dlhead { display: flex; align-items: center; gap: 6px; }
+.dlname { flex: 1; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dlstat { font-size: 12px; color: var(--dim); margin-top: 4px; }
+.dlstat a { color: var(--glow); }
+.dlrow.err .dlstat { color: #ff9db0; }
+.webbar .addr { background: rgba(255,255,255,.07); color: var(--text, #fff); border: 1px solid rgba(255,255,255,.12); border-radius: 18px; padding: 8px 14px; font: inherit; font-size: 13px; outline: none; }
+.webbar .addr:focus { border-color: var(--glow); }

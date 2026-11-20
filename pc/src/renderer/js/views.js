@@ -23,6 +23,7 @@ function refreshView() { const top = main.scrollTop; render(); main.scrollTop = 
 
 function render() {
   main.innerHTML = '';
+  main.classList.remove('webmode');
   const v = NAV.view;
   if (v === 'home') homeView();
   else if (v === 'library') libraryView();
@@ -33,6 +34,7 @@ function render() {
   else if (v === 'videos') videosView(NAV.arg);
   else if (v === 'veditor') videoEditorView(NAV.arg);
   else if (v === 'aeditor') audioEditorView(NAV.arg);
+  else if (v === 'ytweb') ytWebView();
   markPlaying();
 }
 
@@ -426,7 +428,7 @@ function searchView() {
   const res = el('div');
   const web = el('div.row.wrap', { style: { margin: '14px 0' } },
     el('button.btn', { onclick: () => api.openExternal('https://www.google.com/search?q=' + encodeURIComponent(input.value || 'music')) }, 'Search Google'),
-    el('button.btn', { onclick: () => api.openExternal('https://www.youtube.com/results?search_query=' + encodeURIComponent(input.value || 'songs')) }, 'Search YouTube'),
+    el('button.btn', { onclick: () => openYouTube(input.value.trim() || 'songs') }, 'Search YouTube'),
     el('button.btn', { onclick: () => importYouTube() }, 'Import a YouTube playlist'));
   main.append(input, web, res);
   function run() {
@@ -519,7 +521,7 @@ function youtubeView(p) {
   main.appendChild(holder);
   main.appendChild(el('div.row.wrap', { style: { margin: '14px 0' } },
     el('button.btn.primary', { onclick: () => matchYoutube(p) }, 'Find these in my songs'),
-    el('button.btn', { onclick: () => api.openExternal('https://www.youtube.com/playlist?list=' + p.ytListId) }, 'Open in YouTube'),
+    el('button.btn', { onclick: () => openYouTube('https://www.youtube.com/playlist?list=' + p.ytListId) }, 'Open in YouTube'),
     el('span.sub', subtitleOf(p))));
   const list = el('div.list');
   p.yt.forEach((it, i) => list.appendChild(el('div.item', { style: { gridTemplateColumns: '36px 1fr' }, 'data-yt': i,
