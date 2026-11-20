@@ -139,8 +139,9 @@ function openFiles(files) {
 // ---------- the player ----------
 const V = { list: [], i: 0, zoom: 1, panX: 0, panY: 0, fit: 0, rotate: 0, idleTimer: null };
 
-function openVideo(list, i) {
-  closeVideo(true);
+/** Puts the player into the current (video) tab. Use openVideo() (tabs.js) to open a video. */
+function mountVideo(list, i) {
+  unmountVideo(true);
   audio.pause(); // Echo's music stops while a video plays
   V.list = list; V.i = i; V.zoom = 1; V.panX = 0; V.panY = 0; V.rotate = 0;
   const video = el('video#vid', { autoplay: true });
@@ -166,13 +167,14 @@ function openVideo(list, i) {
         el('span.dim', { style: { marginLeft: '10px' } }, 'Space play · ← → 5 s · ↑ ↓ volume · F full screen · scroll to zoom with Ctrl'),
         el('div.grow'), speedBtn, iconBtn('vol', 'Mute (M)', () => { video.muted = !video.muted; flash(video.muted ? 'Muted' : 'Sound on'); }), vol,
         iconBtn('full', 'Full screen (F)', () => api.fullscreen()))));
-  document.body.appendChild(wrap);
+  $('#content').appendChild(wrap);
   paintRange(vol);
   video.volume = vol.value / 100;
 
   function load() {
     const item = V.list[V.i];
     title.textContent = item.name;
+    if (typeof onVideoItem === 'function') onVideoItem(item);
     video.src = item.url;
     for (const t of $$('track', video)) t.remove();
     const key = item.path || item.url;
@@ -355,7 +357,7 @@ async function cantPlay() {
   if (r.ok) { item.path = r.out; item.url = r.url; item.name = item.name + ' (Echo)'; V.load(); VIDS = null; }
   else if (!r.cancelled) alertBox('Couldn\'t convert', r.error);
 }
-function closeVideo(silent) {
+function unmountVideo(silent) {
   const w = $('#vplayer');
   if (!w) return;
   if (V.savePos) V.savePos();

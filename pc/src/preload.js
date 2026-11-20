@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('echo', {
   ytDownload: call('ytdl:download'),
   ytCancel: call('ytdl:cancel'),
   onYtdlProgress: on('ytdl:progress'),
+  onWebNewTab: on('web:newtab'),
   onFfProgress: on('ff:progress'),
   onUpdateAvailable: on('upd:available'),
   onUpdateProgress: on('upd:progress'),

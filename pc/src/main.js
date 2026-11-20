@@ -53,7 +53,8 @@ function createWindow() {
   // YouTube inside Echo: links that open a new window open in the same page instead
   win.webContents.on('did-attach-webview', (ev, wc) => {
     wc.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\/([\w-]+\.)*(youtube\.com|youtu\.be|google\.com|accounts\.google\.com)\//.test(url)) wc.loadURL(url);
+      if (/^https?:\/\/([\w-]+\.)*(youtube\.com|youtu\.be)\//.test(url)) win.webContents.send('web:newtab', url); // a new Echo tab
+      else if (/^https?:\/\/([\w-]+\.)*google\.com\//.test(url)) wc.loadURL(url); // signing in
       else if (/^https?:/.test(url)) shell.openExternal(url);
       return { action: 'deny' };
     });

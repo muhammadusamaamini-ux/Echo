@@ -6,12 +6,15 @@ const NAV = { view: 'home', arg: null };
 const SEL = { ids: new Set(), list: [], anchor: -1, folder: null };
 
 function go(view, arg) {
+  if (view === 'ytweb') { focusYouTube(); return; } // YouTube opens in its own tab
+  if (typeof switchTab === 'function' && TABS.active !== 'echo') switchTab('echo');
   if (typeof leavingEditor === 'function' && !leavingEditor(view)) return;
   NAV.view = view; NAV.arg = arg;
   clearSelection(true);
   $$('#side .nav[data-go]').forEach((n) => n.classList.toggle('on', n.dataset.go === view));
   render();
   main.scrollTop = 0;
+  if (typeof renderTabBar === 'function') renderTabBar();
 }
 function openFolder(id) {
   const p = playlist(id);
@@ -23,7 +26,6 @@ function refreshView() { const top = main.scrollTop; render(); main.scrollTop = 
 
 function render() {
   main.innerHTML = '';
-  main.classList.remove('webmode');
   const v = NAV.view;
   if (v === 'home') homeView();
   else if (v === 'library') libraryView();
@@ -34,7 +36,6 @@ function render() {
   else if (v === 'videos') videosView(NAV.arg);
   else if (v === 'veditor') videoEditorView(NAV.arg);
   else if (v === 'aeditor') audioEditorView(NAV.arg);
-  else if (v === 'ytweb') ytWebView();
   markPlaying();
 }
 

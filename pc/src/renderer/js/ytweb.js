@@ -10,26 +10,28 @@ function ytVideoId(url) {
   return m ? m[1] : null;
 }
 
-/** Opens YouTube in Echo. A search text or a YouTube link both work. */
+/** Opens YouTube in a new Echo tab. A search text or a YouTube link both work. */
 function openYouTube(urlOrSearch) {
+  let url = 'https://www.youtube.com/';
   if (urlOrSearch) {
     const t = String(urlOrSearch).trim();
-    YTW.url = /^https?:\/\//.test(t) ? t : 'https://www.youtube.com/results?search_query=' + encodeURIComponent(t);
+    url = /^https?:\/\//.test(t) ? t : 'https://www.youtube.com/results?search_query=' + encodeURIComponent(t);
   }
-  go('ytweb');
+  newYtTab(url);
 }
 
-function ytWebView() {
-  main.classList.add('webmode');
+/** One YouTube page (with its own back/forward and Download button) for a tab. */
+function buildYtPane(startUrl, tab) {
   const wv = document.createElement('webview');
   wv.setAttribute('partition', 'persist:youtube'); // stays signed in, like a browser
   wv.setAttribute('useragent', UA);
-  wv.setAttribute('src', YTW.url);
+  wv.setAttribute('src', startUrl);
   wv.className = 'ytweb';
-  const addr = el('input.addr', { type: 'text', value: YTW.url, spellcheck: false, placeholder: 'Search YouTube or paste a link',
-    onkeydown: (e) => { if (e.key === 'Enter') { const t = addr.value.trim(); if (t) wv.loadURL(/^https?:\/\//.test(t) ? t : 'https://www.youtube.com/results?search_query=' + encodeURIComponent(t)); } } });
+  const go = (t) => wv.loadURL(/^https?:\/\//.test(t) ? t : 'https://www.youtube.com/results?search_query=' + encodeURIComponent(t));
+  const addr = el('input.addr', { type: 'text', value: startUrl, spellcheck: false, placeholder: 'Search YouTube or paste a link',
+    onkeydown: (e) => { if (e.key === 'Enter') { const t = addr.value.trim(); if (t) go(t); } } });
   const dl = el('button.btn.primary.dlbtn', { onclick: () => ytDownload(wv.getURL(), wv.getTitle()) }, '⬇ Download');
-  dl.style.display = ytVideoId(YTW.url) ? '' : 'none';
+  dl.style.display = ytVideoId(startUrl) ? '' : 'none';
   const back = iconBtn('back', 'Back', () => wv.canGoBack() && wv.goBack());
   const fwd = iconBtn('back', 'Forward', () => wv.canGoForward() && wv.goForward());
   fwd.firstChild.style.transform = 'scaleX(-1)';
@@ -40,16 +42,19 @@ function ytWebView() {
   const update = () => {
     let u = '';
     try { u = wv.getURL(); } catch (e) { return; }
-    YTW.url = u;
     if (document.activeElement !== addr) addr.value = u;
     dl.style.display = ytVideoId(u) ? '' : 'none';
   };
   wv.addEventListener('did-navigate', update);
   wv.addEventListener('did-navigate-in-page', update); // YouTube changes pages without reloading
-  wv.addEventListener('page-title-updated', update);
+  wv.addEventListener('page-title-updated', (e) => {
+    update();
+    tab.title = (e.title || 'YouTube').replace(/^\(\d+\)\s*/, '').replace(/ - YouTube$/, '') || 'YouTube';
+    renderTabBar();
+  });
   // music in Echo pauses while a YouTube video plays
   wv.addEventListener('media-started-playing', () => { if (!audio.paused) audio.pause(); });
-  main.appendChild(el('div.webwrap', bar, wv));
+  return el('div.webwrap.tabpane', bar, wv);
 }
 
 // ---------- downloading ----------
