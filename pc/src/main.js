@@ -10,6 +10,7 @@ const ff = require('./lib/ffmpeg');
 const ytdl = require('./lib/ytdl');
 
 let win = null;
+let reallyQuit = false; // the window's ✕ asks first (tab, music or Echo); this skips the question
 let pendingFiles = [];
 const userData = () => app.getPath('userData');
 const libFile = () => path.join(userData(), 'library.json');
@@ -64,6 +65,11 @@ function createWindow() {
     if (/^https?:/.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
+  win.on('close', (e) => {
+    if (reallyQuit || win.webContents.isCrashed()) return;
+    e.preventDefault();
+    win.webContents.send('app:closeAsk');
+  });
   win.on('enter-full-screen', () => win.webContents.send('fullscreen', true));
   win.on('leave-full-screen', () => win.webContents.send('fullscreen', false));
 }
@@ -82,6 +88,9 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => app.quit());
+app.on('before-quit', () => { reallyQuit = true; });
+ipcMain.handle('app:quit', () => { reallyQuit = true; app.quit(); });
+ipcMain.handle('app:minimize', () => { if (win) win.minimize(); });
 
 // ---------- library ----------
 ipcMain.handle('lib:load', () => {
@@ -319,4 +328,4 @@ ipcMain.handle('upd:check', async () => {
   }
 });
 ipcMain.handle('upd:download', async () => { if (updater) await updater.downloadUpdate(); return true; });
-ipcMain.handle('upd:install', () => { if (updater) updater.quitAndInstall(false, true); });
+ipcMain.handle('upd:install', () => { reallyQuit = true; if (updater) updater.quitAndInstall(false, true); });

@@ -129,3 +129,35 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'w' || e.key === 'W') { e.preventDefault(); e.stopImmediatePropagation(); closeTab(TABS.active); }
   else if (e.key === 'Tab') { e.preventDefault(); e.stopImmediatePropagation(); cycleTab(e.shiftKey ? -1 : 1); }
 }, true);
+
+// ---------- the window's ✕: ask what to close ----------
+let closeAsking = false;
+api.onCloseAsk(async () => {
+  if (closeAsking) return;
+  closeAsking = true;
+  try {
+    const t = activeTab();
+    const opts = [];
+    if (t.kind !== 'echo') opts.push([(t.kind === 'yt' ? '▶️ Close this YouTube tab' : '🎬 Close this video') + ' — ' + t.title, () => closeVideoOrTab(t)]);
+    const others = TABS.list.filter((x) => x.kind !== 'echo');
+    if (others.length > 1 || (others.length === 1 && others[0] !== t)) opts.push([`🗂️ Close all ${others.length} tabs (keep Echo open)`, () => others.forEach((x) => closeTab(x.id))]);
+    if (!$('#player').classList.contains('off')) opts.push(['🎵 Stop the music — ' + ($('#pTitle').textContent || 'song'), () => closePlayer()]);
+    opts.push(['➖ Minimize Echo (music keeps playing)', () => api.minimizeApp()]);
+    opts.push(['⏻ Quit Echo completely', () => quitEcho()]);
+    const i = await choose('What do you want to close?', opts.map((o) => o[0]));
+    if (i >= 0) opts[i][1]();
+  } finally {
+    closeAsking = false;
+  }
+});
+
+function closeVideoOrTab(t) {
+  if (t.kind === 'video' && TABS.active === t.id) closeVideo(true);
+  else closeTab(t.id);
+}
+
+function quitEcho() {
+  try { if (typeof V !== 'undefined' && V.savePos && $('#vplayer')) V.savePos(); } catch (e) { /* ignore */ }
+  try { api.saveLibrary(L); } catch (e) { /* ignore */ }
+  setTimeout(() => api.quitApp(), 150);
+}
