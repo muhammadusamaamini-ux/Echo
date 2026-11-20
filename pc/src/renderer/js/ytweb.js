@@ -82,7 +82,7 @@ function startYtJob(url, info, opt) {
   dlPanel().appendChild(row);
   YTW.jobs.set(id, { row, stat, bar });
   toast(opt.audio ? 'Downloading audio… It will appear in your songs.' : 'Downloading video… It will be in Videos › Echo.');
-  api.ytDownload(id, url, { audio: !!opt.audio, height: opt.height }).then(async (r) => {
+  api.ytDownload(id, url, { audio: !!opt.audio, height: opt.height, title: info.title }).then(async (r) => {
     YTW.jobs.delete(id);
     if (!row.isConnected) return; // cancelled
     if (!r || !r.ok) {
