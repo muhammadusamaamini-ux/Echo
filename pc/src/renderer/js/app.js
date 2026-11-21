@@ -97,7 +97,10 @@ document.addEventListener('keydown', (e) => {
     else if (k === 'ArrowUp' || k === 'ArrowDown') { e.preventDefault(); v.volume = Math.max(0, Math.min(1, v.volume + (k === 'ArrowUp' ? 0.05 : -0.05))); flash('Volume ' + Math.round(v.volume * 100) + '%'); }
     else if (k === 'f' || k === 'F') api.fullscreen();
     else if (k === 'm' || k === 'M') { v.muted = !v.muted; flash(v.muted ? 'Muted' : 'Sound on'); }
-    else if (k === 'Escape') { if (document.fullscreenElement) document.exitFullscreen(); api.fullscreen(false).then((fs) => { if (!fs) closeVideo(); }); }
+    else if (k === 'Escape') { // in full screen, Esc only leaves full screen (like YouTube and VLC)
+      if (document.fullscreenElement || document.body.classList.contains('fullscreen')) { if (document.fullscreenElement) document.exitFullscreen(); api.fullscreen(false); }
+      else closeVideo();
+    }
     else if (k === 'n' || k === 'N') stepVideo(1);
     else if (k === 'p' || k === 'P') stepVideo(-1);
     else if (k === 'a' || k === 'A') nextFit();

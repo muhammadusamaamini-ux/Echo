@@ -100,6 +100,7 @@ function showPage(t) {
 function tabNavigate(view, arg) {
   const t = activeTab();
   const here = currentNav(t);
+  here.scroll = main.scrollTop; // so Back returns to the same place in a long list
   if (!(here.view === view && here.arg === arg)) t.back.push(here);
   if (t.back.length > 30) t.back.shift();
   teardown(t);
@@ -115,6 +116,19 @@ function tabBack() {
   NAV.view = prev.view; NAV.arg = prev.arg;
   clearSelection(true);
   showPage(t);
+  restoreScroll(prev.scroll || 0);
+}
+
+/** Scrolls back to where you were. Some pages (like Videos) fill in a moment later, so it keeps trying briefly. */
+function restoreScroll(y) {
+  let n = 0;
+  const view = NAV.view;
+  const f = () => {
+    if (NAV.view !== view) return;
+    main.scrollTop = y;
+    if (Math.abs(main.scrollTop - y) > 2 && n++ < 90) requestAnimationFrame(f);
+  };
+  f();
 }
 
 function switchTab(id) {
@@ -131,7 +145,7 @@ function switchTab(id) {
   const t = activeTab();
   NAV.view = t.nav.view; NAV.arg = t.nav.arg;
   showPage(t);
-  main.scrollTop = t.scroll;
+  restoreScroll(t.scroll);
 }
 
 /** A new tab (Home unless told otherwise), next to the current one. */
