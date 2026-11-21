@@ -15,7 +15,7 @@ const FEATURES = [
   ['☁️ Google Drive', ['Paste a folder link shared as "Anyone with the link"; songs play online', 'Sub-folders keep their structure', 'Syncs when Echo opens and every hour, or with Sync now']],
   ['🗂️ Tabs (like File Explorer)', ['Every tab is its own Echo window: whatever you open in it (Home, a folder, Videos, a player, YouTube) shows there with its name',
     '+ or Ctrl+T: new tab · right-click a tab: Duplicate, Close, Close other tabs · Ctrl+W or middle-click: close · Ctrl+Tab: next tab',
-    'Closing a video player (← or Esc) goes back to the page you were on in that tab; Alt+← goes back too',
+    'The ← at the left of the tabs goes back to the previous page (Alt+← and the mouse\'s back button too); closing a video returns to the same place in the list',
     'Ctrl+click or middle-click a YouTube link to open it in a new tab',
     'The window\'s ✕ asks what to close: this video, this tab, the other tabs, the music, minimize, or quit Echo']],
   ['▶️ YouTube', ['YouTube opens inside Echo (sidebar → YouTube, or Search → Search YouTube), and stays signed in',
@@ -26,7 +26,7 @@ const FEATURES = [
     'Space play/pause · ← → 5 s · ↑ ↓ volume · mouse wheel volume · F or double-click full screen · Esc close',
     'Ctrl + mouse wheel (or two-finger pinch) to zoom; drag to move when zoomed', 'Fit / Fill / Stretch, rotate, picture-in-picture, speed 0.25×–3×',
     'Subtitles (.srt, .vtt), audio tracks, repeat, sleep timer, snapshot, remembers where you stopped',
-    'Play as audio, or "Keep playing when I close the video"', 'Videos Windows can\'t play are converted to MP4 for you',
+    'Play as audio, or "Keep playing when I close the video"', 'MKV, AVI, HEVC (H.265), 10-bit, WMV and FLV play directly: Echo converts them while they play (seeking works), nothing is copied',
     'Double-click any video or audio file (choose Echo with "Open with"), drag files onto Echo, or open a network stream']],
   ['✂️ Video editor', ['Join videos and photos; trim, split, duplicate, reorder, delete', 'Speed 0.25×–4×, clip volume, voice effects, photo duration',
     '10 filters, brightness / contrast / saturation, rotate, flip', 'Canvas: 9:16 (TikTok, Reels, Shorts), 16:9, 1:1, 4:5, 4:3, 3:4 — crop or black bars',
@@ -92,8 +92,8 @@ document.addEventListener('keydown', (e) => {
     if (typing) return;
     const k = e.key;
     if (k === ' ' || k === 'k') { e.preventDefault(); toggleVideo(); }
-    else if (k === 'ArrowRight') { v.currentTime += e.shiftKey ? 30 : 5; flash('+' + (e.shiftKey ? 30 : 5) + ' s'); }
-    else if (k === 'ArrowLeft') { v.currentTime -= e.shiftKey ? 30 : 5; flash('−' + (e.shiftKey ? 30 : 5) + ' s'); }
+    else if (k === 'ArrowRight') { V.seekTo(V.time() + (e.shiftKey ? 30 : 5)); flash('+' + (e.shiftKey ? 30 : 5) + ' s'); }
+    else if (k === 'ArrowLeft') { V.seekTo(V.time() - (e.shiftKey ? 30 : 5)); flash('−' + (e.shiftKey ? 30 : 5) + ' s'); }
     else if (k === 'ArrowUp' || k === 'ArrowDown') { e.preventDefault(); v.volume = Math.max(0, Math.min(1, v.volume + (k === 'ArrowUp' ? 0.05 : -0.05))); flash('Volume ' + Math.round(v.volume * 100) + '%'); }
     else if (k === 'f' || k === 'F') api.fullscreen();
     else if (k === 'm' || k === 'M') { v.muted = !v.muted; flash(v.muted ? 'Muted' : 'Sound on'); }

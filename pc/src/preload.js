@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('echo', {
   ytCancel: call('ytdl:cancel'),
   onYtdlProgress: on('ytdl:progress'),
   onWebNewTab: on('web:newtab'),
+  streamInfo: call('stream:info'),
+  streamStop: call('stream:stop'),
   onCloseAsk: on('app:closeAsk'),
   quitApp: call('app:quit'),
   minimizeApp: call('app:minimize'),

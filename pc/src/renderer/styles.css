@@ -276,3 +276,9 @@ webview.ytweb { flex: 1; width: 100%; border: 0; background: #0f0f0f; }
 .tabpane { position: absolute; inset: 0; z-index: 5; background: #0f0f0f; }
 .tabpane.off { visibility: hidden; pointer-events: none; }
 body.fullscreen #vplayer { position: fixed; }
+
+.tabback { border: 0; background: none; width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; margin: 0 6px 1px 0; flex: 0 0 auto; color: var(--text); }
+.tabback:hover { background: rgba(255, 255, 255, .1); }
+.tabback.dis { opacity: .3; cursor: default; }
+.tabback.dis:hover { background: none; }
+.tabback svg { width: 20px; height: 20px; fill: currentColor; }

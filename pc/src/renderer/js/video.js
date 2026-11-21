@@ -175,39 +175,71 @@ function mountVideo(list, i) {
     const item = V.list[V.i];
     title.textContent = item.name;
     if (typeof onVideoItem === 'function') onVideoItem(item);
+    V.stream = null;
+    api.streamStop();
     video.src = item.url;
     for (const t of $$('track', video)) t.remove();
     const key = item.path || item.url;
     const at = L.videoResume[key];
     video.onloadedmetadata = () => {
+      if (V.stream) return;
       if (at && at > 5 && at < video.duration - 8) { video.currentTime = at; flash('Resumed at ' + fmtTime(at * 1000)); }
     };
     video.play().catch(() => {});
   }
+  /** Formats Windows can't play (MKV, AVI, HEVC…): Echo converts them while they play. */
+  async function startStream(at) {
+    const item = V.list[V.i];
+    const inf = await api.streamInfo(item.path);
+    if (!inf || !inf.duration) return false;
+    V.stream = { offset: 0, duration: inf.duration, path: item.path };
+    streamSeek(at || 0);
+    return true;
+  }
+  function streamSeek(t) {
+    const s = V.stream;
+    s.offset = Math.max(0, Math.min(t, s.duration - 1));
+    video.src = 'echostream://play?file=' + encodeURIComponent(s.path) + '&t=' + s.offset.toFixed(2);
+    video.onloadedmetadata = null;
+    video.play().catch(() => {});
+  }
+  V.startStream = startStream;
+  // the time in the video, whether it plays directly or through Echo's converter
+  V.time = () => (V.stream ? V.stream.offset + video.currentTime : video.currentTime);
+  V.length = () => (V.stream ? V.stream.duration : video.duration);
+  V.seekTo = (t) => { t = Math.max(0, Math.min(t, (V.length() || 0) - 0.5)); if (V.stream) streamSeek(t); else video.currentTime = t; };
   V.load = load;
   function savePos() {
     const item = V.list[V.i];
-    if (!item || !video.duration) return;
+    if (!item || !V.length()) return;
     const key = item.path || item.url;
-    if (video.currentTime > 5 && video.currentTime < video.duration - 8) L.videoResume[key] = Math.round(video.currentTime);
+    const t = V.time(), d = V.length();
+    if (t > 5 && t < d - 8) L.videoResume[key] = Math.round(t);
     else delete L.videoResume[key];
     save();
   }
   V.savePos = savePos;
   video.addEventListener('timeupdate', () => {
     if (seek._drag) return;
-    seek.value = video.duration ? Math.round(video.currentTime / video.duration * 1000) : 0;
+    const d = V.length();
+    seek.value = d ? Math.round(V.time() / d * 1000) : 0;
     paintRange(seek);
-    pos.textContent = fmtTime(video.currentTime * 1000);
-    dur.textContent = fmtTime(video.duration * 1000);
+    pos.textContent = fmtTime(V.time() * 1000);
+    dur.textContent = fmtTime(d * 1000);
     if (Math.random() < 0.03) savePos();
   });
   video.addEventListener('play', () => playBtn.firstChild.firstChild.setAttribute('href', '#i-pause'));
   video.addEventListener('pause', () => { playBtn.firstChild.firstChild.setAttribute('href', '#i-play'); savePos(); });
   video.addEventListener('ended', () => { delete L.videoResume[V.list[V.i].path || V.list[V.i].url]; save(); if (V.i < V.list.length - 1) stepVideo(1); });
-  video.addEventListener('error', () => cantPlay());
-  seek.addEventListener('input', () => { seek._drag = true; paintRange(seek); pos.textContent = fmtTime(seek.value / 1000 * video.duration * 1000); });
-  seek.addEventListener('change', () => { video.currentTime = seek.value / 1000 * video.duration; seek._drag = false; });
+  video.addEventListener('error', async () => {
+    if (!V.stream && V.list[V.i] && V.list[V.i].path) { // try Echo's converter before giving up
+      const at = L.videoResume[V.list[V.i].path];
+      if (await startStream(at && at > 5 ? at : 0)) { flash(at > 5 ? 'Resumed at ' + fmtTime(at * 1000) : 'Playing with Echo\'s converter'); return; }
+    }
+    cantPlay();
+  });
+  seek.addEventListener('input', () => { seek._drag = true; paintRange(seek); pos.textContent = fmtTime(seek.value / 1000 * V.length() * 1000); });
+  seek.addEventListener('change', () => { V.seekTo(seek.value / 1000 * V.length()); seek._drag = false; });
   vol.addEventListener('input', () => { video.volume = vol.value / 100; video.muted = false; paintRange(vol); L.prefs.videoVolume = video.volume; save(); });
 
   // mouse: double-click full screen, wheel = volume, Ctrl+wheel = zoom, drag when zoomed = move
@@ -335,7 +367,7 @@ async function snapshot() {
 }
 function playVideoAsAudio() {
   const item = V.list[V.i];
-  const t = vid().currentTime;
+  const t = V.time ? V.time() : vid().currentTime;
   closeVideo(true);
   const s = { id: 'v:' + (item.path || item.url), source: 'file', path: item.path, uri: item.url, title: item.name, artist: 'Video', album: '', duration: 0 };
   playList([s], 0);
@@ -345,7 +377,7 @@ async function cantPlay() {
   const item = V.list[V.i];
   if (!item.path) { flash('Can\'t play this stream'); return; }
   const ok = await confirmBox('This video can\'t play here',
-    'Windows can\'t play this video\'s format directly (for example some MKV, AVI or HEVC files).\n\nConvert it to a normal MP4 copy with FFmpeg? The original stays as it is.', 'Convert');
+    'Echo couldn\'t play this file, even with its converter (the file may be damaged or incomplete).\n\nTry making a normal MP4 copy with FFmpeg? The original stays as it is.', 'Make a copy');
   if (!ok) return;
   const out = item.path.replace(/\.[^.\\/]+$/, '') + ' (Echo).mp4';
   const info = await api.probe(item.path);
@@ -364,6 +396,7 @@ function unmountVideo(silent) {
   const v = vid();
   if (v && document.pictureInPictureElement === v) document.exitPictureInPicture().catch(() => {});
   if (L.prefs.videoBackground && v && !v.paused && !silent) { playVideoAsAudio(); return; }
+  if (V.stream) { V.stream = null; api.streamStop(); }
   window.removeEventListener('mousemove', V.onMove);
   window.removeEventListener('mouseup', V.onUp);
   w.remove();

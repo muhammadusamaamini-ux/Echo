@@ -8,6 +8,8 @@ const drive = require('./lib/drive');
 const scan = require('./lib/scan');
 const ff = require('./lib/ffmpeg');
 const ytdl = require('./lib/ytdl');
+const stream = require('./lib/stream');
+stream.registerScheme(); // plays MKV, AVI, HEVC… through FFmpeg (must be before the app is ready)
 
 let win = null;
 let reallyQuit = false; // the window's ✕ asks first (tab, music or Echo); this skips the question
@@ -75,6 +77,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  stream.handle();
   // YouTube's embedded player refuses to play without a web address it recognises.
   session.defaultSession.webRequest.onBeforeSendHeaders(
     { urls: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.googlevideo.com/*'] },
@@ -201,6 +204,8 @@ ipcMain.handle('ytdl:info', (e, url) => ytdl.info(url));
 ipcMain.handle('ytdl:download', (e, id, url, choice) => ytdl.download(id, url, choice, (p) => { if (win && !win.isDestroyed()) win.webContents.send('ytdl:progress', id, p); }));
 ipcMain.handle('ytdl:cancel', (e, id) => ytdl.cancel(id));
 ipcMain.handle('ff:probe', (e, p) => ff.probe(p));
+ipcMain.handle('stream:info', (e, p) => stream.info(p));
+ipcMain.handle('stream:stop', () => stream.stopAll());
 ipcMain.handle('ff:thumb', async (e, p) => {
   const key = Buffer.from(p).toString('base64').replace(/[/+=]/g, '').slice(-60);
   const out = path.join(thumbDir(), key + '.jpg');

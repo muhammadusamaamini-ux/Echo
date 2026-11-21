@@ -36,6 +36,9 @@ function renderTabBar() {
   const bar = $('#tabbar');
   if (!bar) return;
   bar.innerHTML = '';
+  const cur = activeTab();
+  const canBack = cur && (cur.back.length > 0 || NAV.view !== 'home');
+  bar.appendChild(el('button.tabback' + (canBack ? '' : '.dis'), { title: 'Back (Alt+←)', onclick: () => { if (canBack) goBack(); } }, icon('back')));
   for (const t of TABS.list) {
     const view = navOf(t).view;
     const node = el('div.tab' + (t.id === TABS.active ? '.on' : '') + (view === 'ytweb' || view === 'youtube' ? '.k-yt' : ''), {
@@ -101,7 +104,7 @@ function tabNavigate(view, arg) {
   const t = activeTab();
   const here = currentNav(t);
   here.scroll = main.scrollTop; // so Back returns to the same place in a long list
-  if (!(here.view === view && here.arg === arg)) t.back.push(here);
+  if (!(here.view === view && (here.arg ?? null) === (arg ?? null))) t.back.push(here);
   if (t.back.length > 30) t.back.shift();
   teardown(t);
   NAV.view = view; NAV.arg = arg;
@@ -118,6 +121,15 @@ function tabBack() {
   showPage(t);
   restoreScroll(prev.scroll || 0);
 }
+
+/** The ← button: back to the previous page in this tab (out of a video player too). */
+function goBack() {
+  if (NAV.view === 'video') closeVideo(true);
+  else tabBack();
+}
+
+// the mouse's side "back" button
+document.addEventListener('mouseup', (e) => { if (e.button === 3) { e.preventDefault(); goBack(); } });
 
 /** Scrolls back to where you were. Some pages (like Videos) fill in a moment later, so it keeps trying briefly. */
 function restoreScroll(y) {
@@ -221,7 +233,7 @@ function cycleTab(d) {
 api.onWebNewTab((url) => newTab({ view: 'ytweb', arg: url }));
 
 document.addEventListener('keydown', (e) => {
-  if (e.altKey && e.key === 'ArrowLeft' && NAV.view !== 'ytweb') { e.preventDefault(); tabBack(); return; }
+  if (e.altKey && e.key === 'ArrowLeft' && NAV.view !== 'ytweb') { e.preventDefault(); goBack(); return; }
   if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key.toLowerCase();
   if (k === 't') { e.preventDefault(); e.stopImmediatePropagation(); newTab(); }
