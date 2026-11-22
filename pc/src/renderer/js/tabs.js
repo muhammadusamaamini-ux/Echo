@@ -135,8 +135,12 @@ document.addEventListener('mouseup', (e) => { if (e.button === 3) { e.preventDef
 function restoreScroll(y) {
   let n = 0;
   const view = NAV.view;
+  let touched = false;
+  const stop = () => { touched = true; };
+  main.addEventListener('wheel', stop, { once: true, passive: true });
+  main.addEventListener('mousedown', stop, { once: true });
   const f = () => {
-    if (NAV.view !== view) return;
+    if (NAV.view !== view || touched) return;
     main.scrollTop = y;
     if (Math.abs(main.scrollTop - y) > 2 && n++ < 90) requestAnimationFrame(f);
   };

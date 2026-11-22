@@ -251,7 +251,7 @@ async function syncNow(manual) {
       L.prefs.syncSnap = newSnap;
       L.prefs.syncLast = Date.now();
       save();
-      refreshView();
+      if (canon(after) !== canon(local)) refreshView(); // only when something actually came from your other device
       setSyncState('ok', 'Synced ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       if (manual) toast('Synced' + (got ? ` · ${plural(got, 'song')} downloaded` : ''));
       break;

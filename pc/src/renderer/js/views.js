@@ -18,7 +18,13 @@ function openFolder(id) {
   markRecent(id);
   if (p.youtube) go('youtube', id); else go('folder', id);
 }
-function refreshView() { const top = main.scrollTop; render(); main.scrollTop = top; renderSideFolders(); }
+/** Redraws the current page and keeps your place in it (pages like Videos fill in a moment later, so it keeps trying briefly). */
+function refreshView() {
+  const top = main.scrollTop;
+  render();
+  if (typeof restoreScroll === 'function') restoreScroll(top); else main.scrollTop = top;
+  renderSideFolders();
+}
 
 function render() {
   main.innerHTML = '';
