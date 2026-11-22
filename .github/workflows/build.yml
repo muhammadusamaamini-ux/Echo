@@ -54,6 +54,9 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: actions/setup-node@v4
         with:
@@ -62,9 +65,8 @@ jobs:
       - name: Version = 1.0.<build number>
         run: npm version 1.0.${{ github.run_number }} --no-git-tag-version
 
-      - name: Write "What's new" from the commit message
-        run: >
-          node -e "const m=require('child_process').execSync('git log -1 --pretty=%B').toString().split(/\r?\n/).filter(l=>!/^(Co-Authored-By|Claude-Session):/.test(l)).join('\n').trim();require('fs').writeFileSync('resources/release-notes.md', m || 'Improvements')"
+      - name: Write "What's new" (every change since the last update)
+        run: node ../.github/notes.js resources/release-notes.md
 
       - name: Install
         run: |
@@ -111,6 +113,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: actions/download-artifact@v4
         with:
@@ -123,8 +128,8 @@ jobs:
           name: windows
           path: out
 
-      - name: Write "What's new" from the commit message
-        run: git log -1 --pretty=%B | grep -v -E '^(Co-Authored-By|Claude-Session):' > notes.md
+      - name: Write "What's new" (every change since the last update)
+        run: node .github/notes.js notes.md
 
       - name: Publish to Releases (phone and PC update from here)
         uses: softprops/action-gh-release@v2
