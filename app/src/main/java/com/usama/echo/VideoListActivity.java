@@ -138,11 +138,11 @@ public class VideoListActivity extends Activity {
 
     private void load() {
         new Thread(() -> {
-            List<Videos.Folder> all = Videos.scan(this);
+            List<Videos.Folder> folders = Videos.scan(this);
             List<Videos.Video> found = new ArrayList<>();
-            for (Videos.Folder f : all) if (folder == null || f.name.equals(folder)) found.addAll(f.videos);
+            for (Videos.Folder f : folders) if (folder == null || f.name.equals(folder)) found.addAll(f.videos);
             runOnUiThread(() -> {
-                all = found;
+                this.all = found;
                 show();
                 if (getIntent().getBooleanExtra("askFilter", false) && !VideoFilter.active()) VideoFilter.show(this, this::show);
             });
