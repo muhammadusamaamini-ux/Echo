@@ -3,6 +3,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, session, Notification, nativ
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const drive = require('./lib/drive');
 const scan = require('./lib/scan');
@@ -220,6 +221,14 @@ ipcMain.handle('ff:thumb', async (e, p) => {
 });
 ipcMain.handle('ff:waveform', (e, p) => ff.waveform(p));
 ipcMain.handle('ff:frame', async (e, p, at, out) => { await ff.frame(p, at, out); return out; });
+// the small picture above the progress bar when you hover it (for videos played through Echo's converter)
+ipcMain.handle('ff:preview', async (e, p, at) => {
+  const out = path.join(tmpDir(), 'preview-' + crypto.createHash('md5').update(p).digest('hex').slice(0, 10) + '-' + Math.round(at) + '.jpg');
+  if (!fs.existsSync(out)) {
+    try { await ff.run(['-hide_banner', '-y', '-ss', at.toFixed(2), '-i', p, '-frames:v', '1', '-vf', 'scale=240:-2', '-q:v', '6', out], 0); } catch (err) { return null; }
+  }
+  return fs.existsSync(out) ? pathToFileURL(out).href : null;
+});
 ipcMain.handle('ff:outSize', (e, project) => ff.outSize(project));
 ipcMain.handle('ff:cancel', (e, id) => ff.cancel(id));
 ipcMain.handle('ff:export', async (e, job) => {
@@ -243,7 +252,6 @@ ipcMain.handle('ff:export', async (e, job) => {
 });
 
 // ---------- phone ⇄ PC sync (files go to your private GitHub data repository) ----------
-const crypto = require('crypto');
 ipcMain.handle('sync:hash', (e, p) => new Promise((resolve) => {
   const h = crypto.createHash('sha1');
   const s = fs.createReadStream(p);

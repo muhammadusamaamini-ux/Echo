@@ -26,7 +26,7 @@ const FEATURES = [
     'Space play/pause · ← → 5 s · ↑ ↓ volume · mouse wheel volume · F or double-click full screen · Esc close',
     'Ctrl + mouse wheel (or two-finger pinch) to zoom; drag to move when zoomed', 'Fit / Fill / Stretch, rotate, picture-in-picture, speed 0.25×–3×',
     'Subtitles (.srt, .vtt), audio tracks, repeat, sleep timer, snapshot, remembers where you stopped',
-    'Play as audio, or "Keep playing when I close the video"', 'MKV, AVI, HEVC (H.265), 10-bit, WMV and FLV play directly: Echo converts them while they play (seeking works), nothing is copied',
+    'Play as audio, or "Keep playing when I close the video"', 'MKV, AVI, HEVC (H.265), 10-bit, WMV and FLV play directly: Echo converts them while they play (seeking works), nothing is copied', 'Hover the progress bar to preview that moment (like YouTube)',
     'Double-click any video or audio file (choose Echo with "Open with"), drag files onto Echo, or open a network stream']],
   ['✂️ Video editor', ['Join videos and photos; trim, split, duplicate, reorder, delete', 'Speed 0.25×–4×, clip volume, voice effects, photo duration',
     '10 filters, brightness / contrast / saturation, rotate, flip', 'Canvas: 9:16 (TikTok, Reels, Shorts), 16:9, 1:1, 4:5, 4:3, 3:4 — crop or black bars',

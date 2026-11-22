@@ -149,6 +149,50 @@ function mountVideo(list, i) {
   const title = el('div.vtitle');
   const seek = el('input.fill', { type: 'range', min: 0, max: 1000, value: 0, style: { width: '100%' } });
   const pos = el('span', '0:00'), dur = el('span', '0:00');
+  // hover the progress bar: a preview of that moment (like YouTube)
+  const pvCanvas = el('canvas', { width: 240, height: 135 });
+  const pvTime = el('span.pvtime');
+  const pv = el('div.seekprev', pvCanvas, pvTime);
+  const seekBox = el('div.seekwrap', seek, pv);
+  const pvVid = document.createElement('video');
+  pvVid.muted = true; pvVid.preload = 'auto';
+  const PV = { busy: false, want: null, shown: null, cache: new Map() };
+  function pvDraw(src, w, h) {
+    const c = pvCanvas.getContext('2d');
+    c.fillStyle = '#000'; c.fillRect(0, 0, 240, 135);
+    if (!w || !h) return;
+    const s = Math.min(240 / w, 135 / h);
+    c.drawImage(src, (240 - w * s) / 2, (135 - h * s) / 2, w * s, h * s);
+  }
+  async function pvNext() {
+    if (PV.busy || PV.want == null) return;
+    const t = PV.want; PV.want = null; PV.busy = true;
+    try {
+      if (V.stream) { // played through Echo's converter: FFmpeg makes the picture
+        const key = Math.round(t / 2) * 2;
+        let url = PV.cache.get(key);
+        if (!url) { url = await api.previewFrame(V.stream.path, key); if (url) PV.cache.set(key, url); }
+        if (url) await new Promise((res) => { const im = new Image(); im.onload = () => { pvDraw(im, im.naturalWidth, im.naturalHeight); res(); }; im.onerror = res; im.src = url; });
+      } else if (pvVid.readyState >= 1) {
+        await new Promise((res) => { const done = () => { pvVid.removeEventListener('seeked', done); pvDraw(pvVid, pvVid.videoWidth, pvVid.videoHeight); res(); }; pvVid.addEventListener('seeked', done); pvVid.currentTime = t; setTimeout(done, 800); });
+      }
+    } catch (e) { /* no picture this time */ }
+    PV.busy = false;
+    pvNext();
+  }
+  seek.addEventListener('mousemove', (e) => {
+    const d = V.length();
+    if (!d || !isFinite(d)) return;
+    const r = seek.getBoundingClientRect();
+    const f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    const t = f * d;
+    pvTime.textContent = fmtTime(t * 1000);
+    pv.style.left = Math.max(120, Math.min(r.width - 120, e.clientX - r.left)) + 'px';
+    pv.classList.add('on');
+    PV.want = t;
+    pvNext();
+  });
+  seek.addEventListener('mouseleave', () => pv.classList.remove('on'));
   const playBtn = el('button.play', { onclick: () => toggleVideo() }, icon('pause'));
   const vol = el('input.fill', { type: 'range', min: 0, max: 100, value: Math.round((L.prefs.videoVolume == null ? 1 : L.prefs.videoVolume) * 100), style: { width: '110px' } });
   const speedBtn = el('button.btn.small', { onclick: (e) => speedMenu(e) }, '1x');
@@ -161,7 +205,7 @@ function mountVideo(list, i) {
       iconBtn('pip', 'Picture-in-picture (P)', () => video.requestPictureInPicture().catch(() => flash('Not available'))),
       iconBtn('more', 'More', videoMore)),
     el('div.vbottom',
-      el('div.seek', pos, seek, dur),
+      el('div.seek', pos, seekBox, dur),
       el('div.row', { style: { marginTop: '8px' } },
         iconBtn('prev', 'Previous (P)', () => stepVideo(-1)), playBtn, iconBtn('next', 'Next (N)', () => stepVideo(1)),
         el('span.dim', { style: { marginLeft: '10px' } }, 'Space play · ← → 5 s · ↑ ↓ volume · F full screen · scroll to zoom with Ctrl'),
@@ -178,6 +222,8 @@ function mountVideo(list, i) {
     V.stream = null;
     api.streamStop();
     video.src = item.url;
+    pvVid.src = item.url; // the hidden copy used for the hover preview
+    PV.cache.clear();
     for (const t of $$('track', video)) t.remove();
     const key = item.path || item.url;
     const at = L.videoResume[key];
@@ -397,6 +443,7 @@ function unmountVideo(silent) {
   if (v && document.pictureInPictureElement === v) document.exitPictureInPicture().catch(() => {});
   if (L.prefs.videoBackground && v && !v.paused && !silent) { playVideoAsAudio(); return; }
   if (V.stream) { V.stream = null; api.streamStop(); }
+  for (const pvv of $$('video', w)) { pvv.removeAttribute('src'); pvv.load(); }
   window.removeEventListener('mousemove', V.onMove);
   window.removeEventListener('mouseup', V.onUp);
   w.remove();

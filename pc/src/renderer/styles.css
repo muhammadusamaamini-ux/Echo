@@ -282,3 +282,12 @@ body.fullscreen #vplayer { position: fixed; }
 .tabback.dis { opacity: .3; cursor: default; }
 .tabback.dis:hover { background: none; }
 .tabback svg { width: 20px; height: 20px; fill: currentColor; }
+
+/* progress bar hover preview */
+.seekwrap { position: relative; flex: 1; display: flex; align-items: center; }
+.seekwrap > input { width: 100%; }
+.seekprev { position: absolute; bottom: 22px; left: 0; transform: translateX(-50%); width: 240px; pointer-events: none;
+  opacity: 0; transition: opacity .12s; border-radius: 10px; overflow: hidden; background: #000; border: 2px solid rgba(255,255,255,.85); box-shadow: 0 6px 24px rgba(0,0,0,.6); }
+.seekprev.on { opacity: 1; }
+.seekprev canvas { display: block; width: 240px; height: 135px; }
+.seekprev .pvtime { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font-size: 13px; font-weight: 700; text-shadow: 0 1px 3px #000; }
