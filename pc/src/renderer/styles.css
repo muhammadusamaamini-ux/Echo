@@ -294,3 +294,12 @@ body.fullscreen #vplayer { position: fixed; }
 
 .sortbtn { display: inline-flex; align-items: center; gap: 4px; }
 .sortbtn svg { width: 16px; height: 16px; fill: currentColor; }
+
+.sortbtn.on { border-color: var(--glow); color: var(--glow); }
+.filterbar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin: -4px 0 14px; border-radius: 12px; background: rgba(0, 220, 255, .08); border: 1px solid rgba(0, 220, 255, .25); font-size: 13px; }
+.filterbar svg { width: 16px; height: 16px; fill: var(--glow); }
+.filterbar span { flex: 1; }
+.filterbar a { color: var(--glow); cursor: pointer; font-weight: 600; }
+.vfilter .label { margin: 16px 0 8px; }
+.vfilter .label:first-child { margin-top: 0; }
+.vfilter input[type=date], .vfilter input[type=number] { color-scheme: dark; }

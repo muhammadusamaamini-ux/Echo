@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('echo', {
   frame: call('ff:frame'),
   previewFrame: call('ff:preview'),
   fileMtimes: call('file:mtimes'),
+  videoDurations: call('video:durations'),
   outSize: call('ff:outSize'),
   ffExport: call('ff:export'),
   ffCancel: call('ff:cancel'),

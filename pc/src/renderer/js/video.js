@@ -21,59 +21,167 @@ function videosView(arg) {
   if (folderPath) {
     main.appendChild(el('div.crumbs', el('a', { onclick: () => go('videos') }, 'Videos')));
   }
-  main.appendChild(head(folderPath ? folderPath.split(/[\\/]/).pop() : 'Videos', folderPath ? sortButton('v:' + folderPath, VIDEO_SORTS, 'name') : null, viewToggle(),
+  const filterBtn = el('button.btn.sortbtn' + (vfActive() ? '.on' : ''), { title: 'Show only some videos (length, date, size, name)', onclick: openVideoFilter },
+    icon('filter'), vfActive() ? ' Filter on' : ' Filter');
+  main.appendChild(head(folderPath ? folderPath.split(/[\\/]/).pop() : 'Videos',
+    folderPath ? sortButton('v:' + folderPath, VIDEO_SORTS, 'name')
+      : vfActive() ? sortButton('v:*', VIDEO_SORTS, 'modified') : sortButton('vfolders', VFOLDER_SORTS, 'name'),
+    filterBtn, viewToggle(),
     folderPath ? null : el('button.btn', { onclick: addVideoFolder }, '+ Video folder'),
     el('button.btn', { onclick: openVideoFile }, 'Open file'),
     el('button.btn', { onclick: openStream }, 'Network stream'),
     el('button.btn.primary', { onclick: () => go('veditor') }, '✂ Edit a video')));
+  if (vfActive()) {
+    main.appendChild(el('div.filterbar', icon('filter'), el('span', 'Showing only: ' + vfSummary()),
+      el('a', { onclick: openVideoFilter }, 'Change'), el('a', { onclick: () => { VF = vfEmpty(); refreshView(); } }, 'Clear filter')));
+  }
   const box = el('div', el('div.empty', 'Looking for videos…'));
   main.appendChild(box);
-  scanVideos(!folderPath && !VIDS).then((vids) => {
+  scanVideos(!folderPath && !VIDS).then(async (vids) => {
     if (NAV.view !== 'videos') return;
+    const sortKey = folderPath ? 'v:' + folderPath : 'v:*';
+    const mode = getSort(sortKey, folderPath ? 'name' : 'modified');
+    if ((vfActive() && VF.len) || mode === 'longest' || mode === 'shortest') { // lengths are needed: read them (kept for next time)
+      box.innerHTML = '';
+      box.appendChild(el('div.empty', 'Reading the videos\' lengths…'));
+      await fillVideoDurations(folderPath ? vids.filter((v) => v.folderPath === folderPath) : vids);
+      if (NAV.view !== 'videos') return;
+    }
     box.innerHTML = '';
-    if (!folderPath) {
+    if (!folderPath && !vfActive()) {
       const groups = new Map();
       for (const v of vids) { if (!groups.has(v.folderPath)) groups.set(v.folderPath, []); groups.get(v.folderPath).push(v); }
       box.appendChild(el('div.sub', { style: { marginBottom: '14px' } },
         `${plural(vids.length, 'video')} in ${plural(groups.size, 'folder')} · looking in: `,
         ...L.videoDirs.length ? L.videoDirs.map((d, i) => el('span', i ? ', ' : '', el('a', { style: { color: 'var(--glow)', cursor: 'pointer' }, title: 'Right-click to stop looking here', oncontextmenu: (e) => menu(e, [['Stop looking in this folder', () => { L.videoDirs.splice(i, 1); save(); VIDS = null; refreshView(); }]]) }, d))) : ['your Videos and Downloads folders']));
       if (!vids.length) { box.appendChild(el('div.empty', 'No videos found. Use "+ Video folder" to choose where your videos are, or "Open file".')); return; }
-      const list = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-      const wrap = el('div.cards.video');
+      const list = sortVideoFolders([...groups.entries()], getSort('vfolders', 'name'));
+      const wrap = L.prefs.grid ? el('div.cards.video') : el('div.list');
       for (const [fp, vs] of list) {
-        const art = el('div.art', { style: { background: grad(fp) } }, icon('folder'));
-        wrap.appendChild(el('div.card', { onclick: () => go('videos', { folder: fp }) },
-          el('div.art-wrap', art), el('div.name', fp.split(/[\\/]/).pop()), el('div.meta', plural(vs.length, 'video') + ' · ' + fp)));
-        lazyThumb(art, vs[0], true);
+        const size = vs.reduce((t, v) => t + v.size, 0);
+        if (L.prefs.grid) {
+          const art = el('div.art', { style: { background: grad(fp) } }, icon('folder'));
+          wrap.appendChild(el('div.card', { onclick: () => go('videos', { folder: fp }) },
+            el('div.art-wrap', art), el('div.name', fp.split(/[\\/]/).pop()), el('div.meta', plural(vs.length, 'video') + ' · ' + fmtSize(size) + ' · ' + fp)));
+          lazyThumb(art, vs[0], true);
+        } else {
+          const art = el('div.ico', { style: { width: '96px', height: '54px', background: grad(fp) } }, icon('folder'));
+          wrap.appendChild(el('div.item', { style: { gridTemplateColumns: '100px 1fr 110px 90px' }, onclick: () => go('videos', { folder: fp }) },
+            art, el('div', el('div.title', fp.split(/[\\/]/).pop()), el('div.s', fp)), el('div.dur', plural(vs.length, 'video')), el('div.dur', fmtSize(size))));
+          lazyThumb(art, vs[0], true);
+        }
       }
       box.appendChild(wrap);
       return;
     }
-    const vs = sortVideos(vids.filter((v) => v.folderPath === folderPath), getSort('v:' + folderPath, 'name')); // this folder's own sort
-    if (!vs.length) { box.appendChild(el('div.empty', 'No videos here.')); return; }
-    if (L.prefs.grid) {
-      const wrap = el('div.cards.video');
-      vs.forEach((v, i) => {
-        const art = el('div.art', { style: { background: grad(v.name) } }, icon('movie'));
-        const badge = el('div.badge', '');
-        wrap.appendChild(el('div.card', { onclick: () => openVideo(vs, i), oncontextmenu: (e) => videoMenu(e, vs, i) },
-          el('div.art-wrap', art, badge), el('div.name', v.name), el('div.meta', fmtSize(v.size) + ' · ' + new Date(v.mtime).toLocaleDateString())));
-        lazyThumb(art, v, false, badge);
-      });
-      box.appendChild(wrap);
-    } else {
-      const list = el('div.list');
-      vs.forEach((v, i) => {
-        const art = el('div.ico', { style: { width: '96px', height: '54px', background: grad(v.name) } }, icon('movie'));
-        const dur = el('div.dur', '');
-        list.appendChild(el('div.item', { style: { gridTemplateColumns: '36px 100px 1fr 90px 70px 40px' }, onclick: () => openVideo(vs, i), oncontextmenu: (e) => videoMenu(e, vs, i) },
-          el('div.num', String(i + 1)), art, el('div', el('div.title', v.name), el('div.s', new Date(v.mtime).toLocaleString())),
-          el('div.dur', fmtSize(v.size)), dur, el('button.icon-btn', { onclick: (e) => videoMenu(e, vs, i) }, icon('more'))));
-        lazyThumb(art, v, false, dur);
-      });
-      box.appendChild(list);
-    }
+    // one folder, or (with a filter) the matching videos from every folder
+    let vs = folderPath ? vids.filter((v) => v.folderPath === folderPath) : vids;
+    if (vfActive()) vs = vs.filter(vfMatch);
+    vs = sortVideos(vs, mode);
+    if (vfActive()) box.appendChild(el('div.sub', { style: { marginBottom: '12px' } }, plural(vs.length, 'video') + ' match' + (vs.length === 1 ? 'es' : '') + (folderPath ? '' : ' in all your video folders')));
+    if (!vs.length) { box.appendChild(el('div.empty', vfActive() ? 'No videos match this filter.' : 'No videos here.')); return; }
+    box.appendChild(videoListBlock(vs, !folderPath));
   });
+}
+
+function videoListBlock(vs, showFolder) {
+  const when = (v) => new Date(v.mtime).toLocaleDateString();
+  if (L.prefs.grid) {
+    const wrap = el('div.cards.video');
+    vs.forEach((v, i) => {
+      const art = el('div.art', { style: { background: grad(v.name) } }, icon('movie'));
+      const badge = el('div.badge', v.duration ? fmtTime(v.duration * 1000) : '');
+      wrap.appendChild(el('div.card', { onclick: () => openVideo(vs, i), oncontextmenu: (e) => videoMenu(e, vs, i) },
+        el('div.art-wrap', art, badge), el('div.name', v.name), el('div.meta', fmtSize(v.size) + ' · ' + when(v) + (showFolder ? ' · ' + v.folder : ''))));
+      lazyThumb(art, v, false, badge);
+    });
+    return wrap;
+  }
+  const list = el('div.list');
+  vs.forEach((v, i) => {
+    const art = el('div.ico', { style: { width: '96px', height: '54px', background: grad(v.name) } }, icon('movie'));
+    const dur = el('div.dur', v.duration ? fmtTime(v.duration * 1000) : '');
+    list.appendChild(el('div.item', { style: { gridTemplateColumns: '36px 100px 1fr 90px 70px 40px' }, onclick: () => openVideo(vs, i), oncontextmenu: (e) => videoMenu(e, vs, i) },
+      el('div.num', String(i + 1)), art, el('div', el('div.title', v.name), el('div.s', new Date(v.mtime).toLocaleString() + (showFolder ? ' · ' + v.folderPath : ''))),
+      el('div.dur', fmtSize(v.size)), dur, el('button.icon-btn', { onclick: (e) => videoMenu(e, vs, i) }, icon('more'))));
+    lazyThumb(art, v, false, dur);
+  });
+  return list;
+}
+
+async function fillVideoDurations(vs) {
+  const need = vs.filter((v) => v.duration == null);
+  if (!need.length) return;
+  const d = await api.videoDurations(need.map((v) => ({ path: v.path, mtime: v.mtime })));
+  need.forEach((v, i) => { v.duration = d[i] || 0; });
+}
+
+// ---------- filter (length, date, size, name) ----------
+const vfEmpty = () => ({ len: '', lenMin: '', lenMax: '', date: '', from: '', to: '', size: '', text: '' });
+let VF = vfEmpty();
+const vfActive = () => !!(VF.len || VF.date || VF.size || VF.text.trim());
+const VF_LEN = [['', 'Any length'], ['u5', 'Under 5 minutes'], ['5-20', '5 – 20 minutes'], ['20-60', '20 – 60 minutes'], ['o60', 'Over 1 hour'], ['custom', 'Between…']];
+const VF_DATE = [['', 'Any date'], ['today', 'Today'], ['7', 'Last 7 days'], ['30', 'Last 30 days'], ['year', 'This year'], ['custom', 'Between dates…']];
+const VF_SIZE = [['', 'Any size'], ['u100', 'Under 100 MB'], ['100-1000', '100 MB – 1 GB'], ['o1000', 'Over 1 GB']];
+
+function vfMatch(v) {
+  const m = (v.duration || 0) / 60;
+  if (VF.len === 'u5' && !(m < 5)) return false;
+  if (VF.len === '5-20' && !(m >= 5 && m < 20)) return false;
+  if (VF.len === '20-60' && !(m >= 20 && m < 60)) return false;
+  if (VF.len === 'o60' && !(m >= 60)) return false;
+  if (VF.len === 'custom') { if (VF.lenMin !== '' && m < +VF.lenMin) return false; if (VF.lenMax !== '' && m > +VF.lenMax) return false; }
+  const now = new Date();
+  const day0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  if (VF.date === 'today' && v.mtime < day0) return false;
+  if (VF.date === '7' && v.mtime < Date.now() - 7 * 864e5) return false;
+  if (VF.date === '30' && v.mtime < Date.now() - 30 * 864e5) return false;
+  if (VF.date === 'year' && v.mtime < new Date(now.getFullYear(), 0, 1).getTime()) return false;
+  if (VF.date === 'custom') {
+    if (VF.from && v.mtime < new Date(VF.from + 'T00:00:00').getTime()) return false;
+    if (VF.to && v.mtime > new Date(VF.to + 'T23:59:59').getTime()) return false;
+  }
+  const mb = v.size / 1048576;
+  if (VF.size === 'u100' && !(mb < 100)) return false;
+  if (VF.size === '100-1000' && !(mb >= 100 && mb < 1024)) return false;
+  if (VF.size === 'o1000' && !(mb >= 1024)) return false;
+  if (VF.text.trim() && !v.name.toLowerCase().includes(VF.text.trim().toLowerCase())) return false;
+  return true;
+}
+
+function vfSummary() {
+  const parts = [];
+  const lab = (list, k) => (list.find((x) => x[0] === k) || ['', ''])[1];
+  if (VF.len === 'custom') parts.push(`${VF.lenMin || 0}–${VF.lenMax || '∞'} min`); else if (VF.len) parts.push(lab(VF_LEN, VF.len).toLowerCase());
+  if (VF.date === 'custom') parts.push(`${VF.from || '…'} to ${VF.to || 'today'}`); else if (VF.date) parts.push(lab(VF_DATE, VF.date).toLowerCase());
+  if (VF.size) parts.push(lab(VF_SIZE, VF.size).toLowerCase());
+  if (VF.text.trim()) parts.push(`name has "${VF.text.trim()}"`);
+  return parts.join(' · ');
+}
+
+async function openVideoFilter() {
+  const f = { ...VF };
+  const body = el('div.vfilter');
+  const group = (title, list, key, extra) => {
+    const chips = el('div.row.wrap');
+    const draw = () => { chips.innerHTML = ''; for (const [k, t] of list) chips.appendChild(el('div.chip' + (f[key] === k ? '.on' : ''), { onclick: () => { f[key] = k; draw(); if (extra) extra.style.display = f[key] === 'custom' ? '' : 'none'; } }, t)); };
+    draw();
+    body.append(el('div.label', title), chips);
+    if (extra) { extra.style.display = f[key] === 'custom' ? '' : 'none'; body.appendChild(extra); }
+  };
+  const num = (k, ph) => { const i = el('input', { type: 'number', min: 0, step: 1, value: f[k], placeholder: ph, style: { width: '110px' } }); i.oninput = () => { f[k] = i.value; }; return i; };
+  const date = (k) => { const i = el('input', { type: 'date', value: f[k] }); i.oninput = () => { f[k] = i.value; }; return i; };
+  group('Length', VF_LEN, 'len', el('div.row', { style: { marginTop: '8px' } }, num('lenMin', 'from'), el('span.dim', 'to'), num('lenMax', 'to'), el('span.dim', 'minutes')));
+  group('Date (when the file was saved or changed)', VF_DATE, 'date', el('div.row', { style: { marginTop: '8px' } }, date('from'), el('span.dim', 'to'), date('to')));
+  group('Size', VF_SIZE, 'size');
+  const t = el('input', { type: 'text', value: f.text, placeholder: 'Part of the name (optional)' });
+  t.oninput = () => { f.text = t.value; };
+  body.append(el('div.label', 'Name'), t);
+  const v = await dialog({ title: 'Filter videos', body, buttons: [{ text: 'Clear', value: 'clear' }, { text: 'Cancel', value: false }, { text: 'Show', primary: true, value: 'ok' }] });
+  if (v === 'clear') VF = vfEmpty();
+  else if (v === 'ok') VF = f;
+  else return;
+  refreshView();
 }
 
 const thumbObserver = new IntersectionObserver((entries) => {

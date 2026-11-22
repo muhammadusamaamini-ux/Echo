@@ -678,6 +678,17 @@ public class MainActivity extends Activity {
         actions.addView(audioEd, chipMargin());
         actions.addView(open, chipMargin());
         actions.addView(stream, chipMargin());
+        TextView sortF = Ui.pill(this, "Sort folders", false);
+        sortF.setOnClickListener(v -> Sorter.choose(this, "vfolders", Sorter.VFOLDER_CODES, Sorter.VFOLDER_LABELS, "name", () -> {
+            videoFolders = Sorter.folders(this, videoFolders);
+            videoAdapter.notifyDataSetChanged();
+        }));
+        TextView filt = Ui.pill(this, "Filter", false);
+        filt.setOnClickListener(v -> VideoFilter.show(this, () -> {
+            if (VideoFilter.active()) startActivity(new Intent(this, VideoListActivity.class)); // matching videos from every folder
+        }));
+        actions.addView(sortF, chipMargin());
+        actions.addView(filt, chipMargin());
         hs.addView(actions);
         page.addView(hs);
         videoStatus = Ui.text(this, "", 14, Ui.SUB, false);
@@ -758,7 +769,7 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             List<Videos.Folder> found = Videos.scan(this);
             runOnUiThread(() -> {
-                videoFolders = found;
+                videoFolders = Sorter.folders(this, found);
                 videoAdapter.notifyDataSetChanged();
                 int n = 0;
                 for (Videos.Folder f : found) n += f.videos.size();

@@ -206,6 +206,28 @@ ipcMain.handle('ytdl:info', (e, url) => ytdl.info(url));
 ipcMain.handle('ytdl:download', (e, id, url, choice) => ytdl.download(id, url, choice, (p) => { if (win && !win.isDestroyed()) win.webContents.send('ytdl:progress', id, p); }));
 ipcMain.handle('ytdl:cancel', (e, id) => ytdl.cancel(id));
 ipcMain.handle('ff:probe', (e, p) => ff.probe(p));
+// videos' lengths, for filtering and sorting by length (kept in a small file so it's quick next time)
+let durCache = null;
+ipcMain.handle('video:durations', async (e, items) => {
+  const file = path.join(userData(), 'video-lengths.json');
+  if (!durCache) { try { durCache = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (err) { durCache = {}; } }
+  const out = new Array(items.length);
+  const todo = [];
+  items.forEach((it, i) => { const c = durCache[it.path]; if (c && c.m === it.mtime) out[i] = c.d; else todo.push(i); });
+  let k = 0;
+  const worker = async () => {
+    while (k < todo.length) {
+      const i = todo[k++];
+      let d = 0;
+      try { d = (await ff.probe(items[i].path)).duration || 0; } catch (err) { /* unreadable */ }
+      out[i] = d;
+      durCache[items[i].path] = { m: items[i].mtime, d };
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  if (todo.length) { try { fs.writeFileSync(file, JSON.stringify(durCache)); } catch (err) { /* ignore */ } }
+  return out;
+});
 ipcMain.handle('stream:info', (e, p) => stream.info(p));
 ipcMain.handle('stream:stop', () => stream.stopAll());
 ipcMain.handle('ff:thumb', async (e, p) => {

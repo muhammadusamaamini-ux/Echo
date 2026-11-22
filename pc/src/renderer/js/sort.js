@@ -9,7 +9,9 @@ const SONG_SORTS = [
 const VIDEO_SORTS = [
   ['name', 'Name (A–Z)'], ['nameDesc', 'Name (Z–A)'], ['modified', 'Date modified (newest first)'],
   ['modifiedOld', 'Date modified (oldest first)'], ['biggest', 'Size (largest first)'], ['smallest', 'Size (smallest first)'],
+  ['longest', 'Longest first'], ['shortest', 'Shortest first'],
 ];
+const VFOLDER_SORTS = [['name', 'Name (A–Z)'], ['nameDesc', 'Name (Z–A)'], ['most', 'Most videos first'], ['newest', 'Newest videos first'], ['biggest', 'Size (largest first)']];
 const YT_SORTS = [['custom', 'Playlist order'], ['title', 'Name (A–Z)'], ['titleDesc', 'Name (Z–A)'], ['artist', 'Channel (A–Z)']];
 
 const cmp = (a, b) => String(a || '').localeCompare(String(b || ''), undefined, { sensitivity: 'base', numeric: true });
@@ -70,6 +72,8 @@ function sortVideos(list, mode) {
     modifiedOld: (x, y) => x.mtime - y.mtime,
     biggest: (x, y) => y.size - x.size,
     smallest: (x, y) => x.size - y.size,
+    longest: (x, y) => (y.duration || 0) - (x.duration || 0),
+    shortest: (x, y) => (x.duration || 0) - (y.duration || 0),
   }[mode];
   if (by) a.sort(by);
   return a;
@@ -81,4 +85,19 @@ function sortYt(items, mode) {
   const by = { title: (x, y) => cmp(x.it.t, y.it.t), titleDesc: (x, y) => cmp(y.it.t, x.it.t), artist: (x, y) => cmp(x.it.a, y.it.a) || cmp(x.it.t, y.it.t) }[mode];
   if (by) a.sort(by);
   return a;
+}
+
+/** Video folders: [[folderPath, videos], …] */
+function sortVideoFolders(groups, mode) {
+  const name = (fp) => fp.split(/[\\/]/).pop();
+  const newest = (vs) => Math.max(...vs.map((v) => v.mtime));
+  const size = (vs) => vs.reduce((t, v) => t + v.size, 0);
+  const by = {
+    name: (x, y) => cmp(name(x[0]), name(y[0])),
+    nameDesc: (x, y) => cmp(name(y[0]), name(x[0])),
+    most: (x, y) => y[1].length - x[1].length,
+    newest: (x, y) => newest(y[1]) - newest(x[1]),
+    biggest: (x, y) => size(y[1]) - size(x[1]),
+  }[mode] || ((x, y) => cmp(name(x[0]), name(y[0])));
+  return groups.slice().sort(by);
 }

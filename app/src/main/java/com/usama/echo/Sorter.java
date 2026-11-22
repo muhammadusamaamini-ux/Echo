@@ -28,6 +28,8 @@ final class Sorter {
     static final String[] VIDEO_CODES = {"name", "nameDesc", "newest", "oldest", "biggest", "smallest", "longest"};
     static final String[] VIDEO_LABELS = {"Name (A–Z)", "Name (Z–A)", "Newest first", "Oldest first", "Size (largest first)",
             "Size (smallest first)", "Longest first"};
+    static final String[] VFOLDER_CODES = {"name", "nameDesc", "most", "newest", "biggest"};
+    static final String[] VFOLDER_LABELS = {"Name (A–Z)", "Name (Z–A)", "Most videos first", "Newest videos first", "Size (largest first)"};
     static final String[] YT_CODES = {"custom", "title", "titleDesc", "artist"};
     static final String[] YT_LABELS = {"Playlist order", "Name (A–Z)", "Name (Z–A)", "Channel (A–Z)"};
 
@@ -126,6 +128,33 @@ final class Sorter {
         }
         if (by != null) Collections.sort(out, by);
         return out;
+    }
+
+    /** Video folders, in the Videos page's own sort. */
+    static List<Videos.Folder> folders(Context c, List<Videos.Folder> in) {
+        List<Videos.Folder> out = new ArrayList<>(in);
+        Comparator<Videos.Folder> by;
+        switch (get(c, "vfolders", "name")) {
+            case "nameDesc": by = (x, y) -> cmp(y.name, x.name); break;
+            case "most": by = (x, y) -> Integer.compare(y.videos.size(), x.videos.size()); break;
+            case "newest": by = (x, y) -> Long.compare(newest(y), newest(x)); break;
+            case "biggest": by = (x, y) -> Long.compare(size(y), size(x)); break;
+            default: by = (x, y) -> cmp(x.name, y.name); break;
+        }
+        Collections.sort(out, by);
+        return out;
+    }
+
+    private static long newest(Videos.Folder f) {
+        long m = 0;
+        for (Videos.Video v : f.videos) m = Math.max(m, v.date);
+        return m;
+    }
+
+    private static long size(Videos.Folder f) {
+        long t = 0;
+        for (Videos.Video v : f.videos) t += v.size;
+        return t;
     }
 
     static List<Library.YtItem> yt(Context c, Library.Playlist p) {

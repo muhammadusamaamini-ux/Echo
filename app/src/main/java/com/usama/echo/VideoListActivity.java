@@ -22,6 +22,8 @@ import java.util.List;
 /** The videos in one folder, with thumbnails. */
 public class VideoListActivity extends Activity {
     private List<Videos.Video> videos = new ArrayList<>();
+    private List<Videos.Video> all = null; // before filtering
+    private android.widget.ImageButton filterBtn;
     private ListGrid grid;
     private BaseAdapter adapter;
     private TextView status;
@@ -33,14 +35,16 @@ public class VideoListActivity extends Activity {
         folder = getIntent().getStringExtra("folder");
         LinearLayout root = Ui.column(this);
         LinearLayout bar = Ui.topBar(this, folder == null ? "Videos" : folder, R.drawable.ic_back);
-        bar.addView(Sorter.button(this, "v:" + (folder == null ? "*" : folder), Sorter.VIDEO_CODES, Sorter.VIDEO_LABELS, "newest", () -> {
-            videos = Sorter.videos(this, "v:" + (folder == null ? "*" : folder), videos); // this folder's own sort
-            adapter.notifyDataSetChanged();
-        }));
+        bar.addView(Sorter.button(this, "v:" + (folder == null ? "*" : folder), Sorter.VIDEO_CODES, Sorter.VIDEO_LABELS, "newest", this::show));
+        filterBtn = Ui.icon(this, R.drawable.ic_filter, 44, VideoFilter.active() ? Ui.ACCENT : Ui.TEXT);
+        filterBtn.setContentDescription("Filter");
+        filterBtn.setOnClickListener(v -> VideoFilter.show(this, this::show));
+        bar.addView(filterBtn);
         bar.addView(ListGrid.toggleButton(this, () -> grid.apply()));
         root.addView(bar);
         status = Ui.text(this, "Loading…", 14, Ui.SUB, false);
         status.setPadding(Ui.dp(this, 20), 0, Ui.dp(this, 20), Ui.dp(this, 8));
+        status.setOnClickListener(v -> { if (VideoFilter.active()) VideoFilter.show(this, this::show); });
         root.addView(status);
 
         ListGrid list = new ListGrid(this);
@@ -138,11 +142,28 @@ public class VideoListActivity extends Activity {
             List<Videos.Video> found = new ArrayList<>();
             for (Videos.Folder f : all) if (folder == null || f.name.equals(folder)) found.addAll(f.videos);
             runOnUiThread(() -> {
-                videos = Sorter.videos(this, "v:" + (folder == null ? "*" : folder), found);
-                adapter.notifyDataSetChanged();
-                status.setText(found.size() + (found.size() == 1 ? " video" : " videos"));
+                all = found;
+                show();
+                if (getIntent().getBooleanExtra("askFilter", false) && !VideoFilter.active()) VideoFilter.show(this, this::show);
             });
         }).start();
+    }
+
+    /** Applies this folder's sort and the filter. */
+    private void show() {
+        if (all == null) return;
+        List<Videos.Video> list = VideoFilter.active() ? VideoFilter.apply(all) : all;
+        videos = Sorter.videos(this, "v:" + (folder == null ? "*" : folder), list);
+        adapter.notifyDataSetChanged();
+        filterBtn.setColorFilter(VideoFilter.active() ? Ui.ACCENT : Ui.TEXT);
+        String n = videos.size() + (videos.size() == 1 ? " video" : " videos");
+        status.setText(VideoFilter.active() ? n + " match  ·  " + VideoFilter.summary() + "  (tap to change)" : n);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        show(); // the filter may have changed on another screen
     }
 
     private void menu(View anchor, int i) {
