@@ -286,6 +286,9 @@ function mountVideo(list, i) {
   });
   seek.addEventListener('input', () => { seek._drag = true; paintRange(seek); pos.textContent = fmtTime(seek.value / 1000 * V.length() * 1000); });
   seek.addEventListener('change', () => { V.seekTo(seek.value / 1000 * V.length()); seek._drag = false; });
+  V.setVolume = (x) => { vol.value = Math.round(Math.max(0, Math.min(1, x)) * 100); vol.dispatchEvent(new Event('input')); };
+  // after using a slider with the mouse, the keys go back to the player
+  for (const r of [seek, vol]) r.addEventListener('pointerup', () => setTimeout(() => r.blur(), 0));
   vol.addEventListener('input', () => { video.volume = vol.value / 100; video.muted = false; paintRange(vol); L.prefs.videoVolume = video.volume; save(); });
 
   // mouse: double-click full screen, wheel = volume, Ctrl+wheel = zoom, drag when zoomed = move

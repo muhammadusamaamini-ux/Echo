@@ -86,15 +86,19 @@ api.onUpdateAvailable((r) => {
 
 // ---------- keyboard ----------
 document.addEventListener('keydown', (e) => {
-  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  // only real text boxes count as typing; sliders (like the progress bar) and buttons don't take over the keys
+  const a = document.activeElement;
+  const typing = !!a && (/TEXTAREA|SELECT/.test(a.tagName) || a.isContentEditable ||
+    (a.tagName === 'INPUT' && !/^(range|checkbox|radio|button|submit|color|file)$/i.test(a.type)));
   const v = $('#vid');
   if (v) { // video player keys
     if (typing) return;
     const k = e.key;
+    if (/^(Arrow(Up|Down|Left|Right)| |Home|End|PageUp|PageDown)$/.test(k)) e.preventDefault(); // not the focused slider or button
     if (k === ' ' || k === 'k') { e.preventDefault(); toggleVideo(); }
     else if (k === 'ArrowRight') { V.seekTo(V.time() + (e.shiftKey ? 30 : 5)); flash('+' + (e.shiftKey ? 30 : 5) + ' s'); }
     else if (k === 'ArrowLeft') { V.seekTo(V.time() - (e.shiftKey ? 30 : 5)); flash('−' + (e.shiftKey ? 30 : 5) + ' s'); }
-    else if (k === 'ArrowUp' || k === 'ArrowDown') { e.preventDefault(); v.volume = Math.max(0, Math.min(1, v.volume + (k === 'ArrowUp' ? 0.05 : -0.05))); flash('Volume ' + Math.round(v.volume * 100) + '%'); }
+    else if (k === 'ArrowUp' || k === 'ArrowDown') { V.setVolume(v.volume + (k === 'ArrowUp' ? 0.05 : -0.05)); flash('Volume ' + Math.round(v.volume * 100) + '%'); }
     else if (k === 'f' || k === 'F') api.fullscreen();
     else if (k === 'm' || k === 'M') { v.muted = !v.muted; flash(v.muted ? 'Muted' : 'Sound on'); }
     else if (k === 'Escape') { // in full screen, Esc only leaves full screen (like YouTube and VLC)
