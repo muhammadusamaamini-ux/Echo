@@ -50,6 +50,7 @@ public class MainActivity extends Activity {
     private TextView filterEmpty;
     private final List<ListGrid> grids = new ArrayList<>();
     private ImageButton viewToggle;
+    private ImageButton sortBtn; // the Songs page's sort
     private SongAdapter songAdapter, searchAdapter;
     private BaseAdapter listAdapter;
     private List<Library.Playlist> playlists = new ArrayList<>();
@@ -83,6 +84,10 @@ public class MainActivity extends Activity {
         viewToggle = ListGrid.toggleButton(this, () -> {
             for (ListGrid g : grids) g.apply();
         });
+        sortBtn = Sorter.button(this, "songs", java.util.Arrays.copyOfRange(Sorter.SONG_CODES, 1, Sorter.SONG_CODES.length),
+                java.util.Arrays.copyOfRange(Sorter.SONG_LABELS, 1, Sorter.SONG_LABELS.length), "title", this::refresh);
+        sortBtn.setVisibility(View.GONE);
+        head.addView(sortBtn);
         head.addView(viewToggle);
         ImageButton add = Ui.icon(this, R.drawable.ic_add, 44, Ui.TEXT);
         add.setOnClickListener(this::addMenu);
@@ -460,6 +465,7 @@ public class MainActivity extends Activity {
             viewToggle.setVisibility(p == P_HOME || p == P_SEARCH ? View.GONE : View.VISIBLE);
             ListGrid.syncButton(viewToggle, this);
         }
+        if (sortBtn != null) sortBtn.setVisibility(p == P_SONGS ? View.VISIBLE : View.GONE);
     }
 
     // ---------- Home: Recently played + Your folders ----------
@@ -804,7 +810,7 @@ public class MainActivity extends Activity {
 
     void refresh() {
         Library lib = Library.get(this);
-        songAdapter.setItems(lib.sortedSongs());
+        songAdapter.setItems(Sorter.songs(this, "songs", "title", lib.sortedSongs()));
         playlists = lib.visibleChildren(null);
         listAdapter.notifyDataSetChanged();
         if (searchBox != null) runSearch();

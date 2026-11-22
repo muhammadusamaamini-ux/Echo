@@ -7,6 +7,8 @@ const FEATURES = [
   ['🏠 Home, Search, Library, Songs', ['Home: greeting, Recently played, Your folders, Recently added', 'Search your songs and folders, or search Google and YouTube',
     'Library: all folders, filtered by PC folders, Google Drive, YouTube or your own playlists', 'Songs: every song, sortable by title, artist, album, date or length',
     'List or tile view: the ☰ / ▦ button']],
+  ['🔤 Sorting', ['Sort button on every folder, the Songs page, video folders and YouTube playlists: name, artist, album, newest, oldest, date modified, length (videos: size too)',
+    'Each list remembers its own sort: one folder A–Z, another newest first, another by artist']],
   ['📁 Folders', ['Folders inside folders; drag a folder onto another to move it', 'Right-click (or ⋮) for Play all, Shuffle, Rename, Move, Hide, Sync now, Delete',
     'Hide folders; find them in Library → Hidden folders', 'Deleting a folder removes its sub-folders and songs (songs also in other folders stay)']],
   ['☑️ Selecting songs', ['Click to play; Ctrl+click or Shift+click to select several; Ctrl+A selects all', 'Drag songs onto a folder (also in the sidebar) to add them',

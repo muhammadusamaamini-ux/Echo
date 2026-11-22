@@ -125,6 +125,7 @@ ipcMain.handle('dialog:save', async (e, opts) => {
   return r.canceled ? null : r.filePath;
 });
 ipcMain.handle('file:url', (e, p) => pathToFileURL(p).href);
+ipcMain.handle('file:mtimes', (e, paths) => paths.map((p) => { try { return fs.statSync(p).mtimeMs; } catch (err) { return 0; } }));
 ipcMain.handle('file:exists', (e, p) => { try { return fs.statSync(p).isFile(); } catch (err) { return false; } });
 ipcMain.handle('file:isDir', (e, p) => { try { return fs.statSync(p).isDirectory(); } catch (err) { return false; } });
 ipcMain.handle('file:writeTemp', (e, name, dataUrl) => {

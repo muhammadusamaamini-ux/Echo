@@ -21,7 +21,7 @@ function videosView(arg) {
   if (folderPath) {
     main.appendChild(el('div.crumbs', el('a', { onclick: () => go('videos') }, 'Videos')));
   }
-  main.appendChild(head(folderPath ? folderPath.split(/[\\/]/).pop() : 'Videos', viewToggle(),
+  main.appendChild(head(folderPath ? folderPath.split(/[\\/]/).pop() : 'Videos', folderPath ? sortButton('v:' + folderPath, VIDEO_SORTS, 'name') : null, viewToggle(),
     folderPath ? null : el('button.btn', { onclick: addVideoFolder }, '+ Video folder'),
     el('button.btn', { onclick: openVideoFile }, 'Open file'),
     el('button.btn', { onclick: openStream }, 'Network stream'),
@@ -49,7 +49,7 @@ function videosView(arg) {
       box.appendChild(wrap);
       return;
     }
-    const vs = vids.filter((v) => v.folderPath === folderPath);
+    const vs = sortVideos(vids.filter((v) => v.folderPath === folderPath), getSort('v:' + folderPath, 'name')); // this folder's own sort
     if (!vs.length) { box.appendChild(el('div.empty', 'No videos here.')); return; }
     if (L.prefs.grid) {
       const wrap = el('div.cards.video');

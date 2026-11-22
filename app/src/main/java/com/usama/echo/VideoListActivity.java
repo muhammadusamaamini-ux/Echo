@@ -33,6 +33,10 @@ public class VideoListActivity extends Activity {
         folder = getIntent().getStringExtra("folder");
         LinearLayout root = Ui.column(this);
         LinearLayout bar = Ui.topBar(this, folder == null ? "Videos" : folder, R.drawable.ic_back);
+        bar.addView(Sorter.button(this, "v:" + (folder == null ? "*" : folder), Sorter.VIDEO_CODES, Sorter.VIDEO_LABELS, "newest", () -> {
+            videos = Sorter.videos(this, "v:" + (folder == null ? "*" : folder), videos); // this folder's own sort
+            adapter.notifyDataSetChanged();
+        }));
         bar.addView(ListGrid.toggleButton(this, () -> grid.apply()));
         root.addView(bar);
         status = Ui.text(this, "Loading…", 14, Ui.SUB, false);
@@ -134,7 +138,7 @@ public class VideoListActivity extends Activity {
             List<Videos.Video> found = new ArrayList<>();
             for (Videos.Folder f : all) if (folder == null || f.name.equals(folder)) found.addAll(f.videos);
             runOnUiThread(() -> {
-                videos = found;
+                videos = Sorter.videos(this, "v:" + (folder == null ? "*" : folder), found);
                 adapter.notifyDataSetChanged();
                 status.setText(found.size() + (found.size() == 1 ? " video" : " videos"));
             });

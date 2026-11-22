@@ -291,3 +291,6 @@ body.fullscreen #vplayer { position: fixed; }
 .seekprev.on { opacity: 1; }
 .seekprev canvas { display: block; width: 240px; height: 135px; }
 .seekprev .pvtime { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font-size: 13px; font-weight: 700; text-shadow: 0 1px 3px #000; }
+
+.sortbtn { display: inline-flex; align-items: center; gap: 4px; }
+.sortbtn svg { width: 16px; height: 16px; fill: currentColor; }

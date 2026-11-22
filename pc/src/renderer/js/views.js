@@ -349,7 +349,7 @@ function folderView(p) {
   while (cur) { chain.unshift(cur); cur = playlist(cur.parentId); }
   chain.forEach((c) => crumbs.append(' › ', el('a', { onclick: () => openFolder(c.id) }, c.name)));
   main.appendChild(crumbs);
-  main.appendChild(head(p.name, viewToggle(), iconBtn('more', 'More', (e) => folderMenu(e, p))));
+  main.appendChild(head(p.name, sortButton('pl:' + p.id, SONG_SORTS, 'custom'), viewToggle(), iconBtn('more', 'More', (e) => folderMenu(e, p))));
   main.appendChild(el('div.sub', { style: { marginTop: '-8px', marginBottom: '14px' } }, subtitleOf(p) + (p.hidden ? ' · hidden' : '')));
   main.appendChild(el('div.row.wrap', { style: { marginBottom: '8px' } },
     el('button.btn.primary', { onclick: () => playList(allSongsIn(p), 0, false) }, '▶  Play'),
@@ -359,7 +359,7 @@ function folderView(p) {
     p.sync ? el('button.btn', { onclick: () => syncOne(p) }, 'Sync now') : null));
   const subs = visibleChildren(p.id);
   if (subs.length) { main.appendChild(el('h2', 'Folders')); main.appendChild(foldersBlock(subs, p.id, false)); }
-  const songs = songsOf(p);
+  const songs = sortSongs(songsOf(p), getSort('pl:' + p.id, 'custom')); // this folder's own sort
   if (songs.length || !subs.length) {
     if (subs.length) main.appendChild(el('h2', 'Songs'));
     main.appendChild(songsBlock(songs, { folder: p, empty: 'This folder is empty. Use "+ Add songs" or drag songs here.' }));
@@ -395,26 +395,13 @@ async function addSongsDialog(p) {
 }
 
 // ---------- Songs ----------
-let songSort = 'title';
 function songsView() {
   SEL.folder = null;
   const all = sortedSongs();
-  main.appendChild(head('Songs', viewToggle(), el('button.btn', { onclick: showImport }, '+ Import'),
+  main.appendChild(head('Songs', sortButton('songs', SONG_SORTS.slice(1), 'title'), viewToggle(), el('button.btn', { onclick: showImport }, '+ Import'),
     all.length ? el('button.btn.primary', { onclick: () => playList(all, 0, true) }, 'Shuffle all') : null));
-  const sorts = el('div.row', { style: { marginBottom: '12px' } }, el('span.dim', 'Sort:'));
-  for (const [k, t] of [['title', 'Title'], ['artist', 'Artist'], ['album', 'Album'], ['added', 'Recently added'], ['duration', 'Length']]) {
-    sorts.appendChild(el('div.chip' + (songSort === k ? '.on' : ''), { onclick: () => { songSort = k; refreshView(); } }, t));
-  }
-  main.appendChild(sorts);
-  const by = {
-    title: (a, b) => (a.title || '').localeCompare(b.title || ''),
-    artist: (a, b) => (a.artist || '~').localeCompare(b.artist || '~') || (a.title || '').localeCompare(b.title || ''),
-    album: (a, b) => (a.album || '~').localeCompare(b.album || '~'),
-    added: (a, b) => (b.added || 0) - (a.added || 0),
-    duration: (a, b) => (b.duration || 0) - (a.duration || 0),
-  };
   main.appendChild(el('div.sub', { style: { marginBottom: '10px' } }, plural(all.length, 'song') + ' · click to play, Ctrl+click to select several, drag onto a folder to add'));
-  main.appendChild(songsBlock(all.sort(by[songSort]), { empty: 'No songs yet. Use "+ Import" to add music.' }));
+  main.appendChild(songsBlock(sortSongs(all, getSort('songs', 'title')), { empty: 'No songs yet. Use "+ Import" to add music.' }));
 }
 
 // ---------- Search ----------
@@ -514,7 +501,9 @@ let ytPlayer = null;
 function youtubeView(p) {
   if (!p) { go('library'); return; }
   main.appendChild(el('div.crumbs', el('a', { onclick: () => go('library') }, 'Library')));
-  main.appendChild(head(p.name, iconBtn('more', 'More', (e) => folderMenu(e, p))));
+  main.appendChild(head(p.name, sortButton('yt:' + p.id, YT_SORTS, 'custom'), iconBtn('more', 'More', (e) => folderMenu(e, p))));
+  const order = sortYt(p.yt, getSort('yt:' + p.id, 'custom')); // this playlist's own sort
+  const ids = order.map((o) => o.it.v);
   const holder = el('div', { style: { aspectRatio: '16 / 9', maxWidth: '900px', borderRadius: '16px', overflow: 'hidden', background: '#000' } }, el('div#ytplayer'));
   main.appendChild(holder);
   main.appendChild(el('div.row.wrap', { style: { margin: '14px 0' } },
@@ -522,8 +511,8 @@ function youtubeView(p) {
     el('button.btn', { onclick: () => openYouTube('https://www.youtube.com/playlist?list=' + p.ytListId) }, 'Open in YouTube'),
     el('span.sub', subtitleOf(p))));
   const list = el('div.list');
-  p.yt.forEach((it, i) => list.appendChild(el('div.item', { style: { gridTemplateColumns: '36px 1fr' }, 'data-yt': i,
-    onclick: () => { if (ytPlayer && ytPlayer.loadPlaylist) ytPlayer.loadPlaylist(p.yt.map((x) => x.v), i); markRecent(p.id); } },
+  order.forEach(({ it }, i) => list.appendChild(el('div.item', { style: { gridTemplateColumns: '36px 1fr' }, 'data-yt': i,
+    onclick: () => { if (ytPlayer && ytPlayer.loadPlaylist) ytPlayer.loadPlaylist(ids, i); markRecent(p.id); } },
   el('div.num', String(i + 1)), el('div', el('div.title', it.t), el('div.s', it.a)))));
   main.appendChild(list);
   loadYtApi().then((YT) => {
@@ -531,7 +520,7 @@ function youtubeView(p) {
     ytPlayer = new YT.Player('ytplayer', {
       width: '100%', height: '100%', playerVars: { rel: 0, playsinline: 1 },
       events: {
-        onReady: () => ytPlayer.cuePlaylist(p.yt.map((x) => x.v), 0),
+        onReady: () => ytPlayer.cuePlaylist(ids, 0),
         onStateChange: (e) => {
           if (e.data === 1) audio.pause(); // stop Echo's music while YouTube plays
           let i = -1;

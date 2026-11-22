@@ -29,6 +29,7 @@ public class YouTubeActivity extends Activity {
     private Library.Playlist pl;
     private WebView web;
     private int current = -1;
+    private List<Library.YtItem> items; // the playlist in this playlist's own sort order
     private BaseAdapter adapter;
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -44,7 +45,9 @@ public class YouTubeActivity extends Activity {
         LinearLayout root = Ui.column(this);
         root.setBackgroundColor(Ui.BG);
 
+        items = Sorter.yt(this, pl);
         LinearLayout bar = Ui.topBar(this, pl.name, R.drawable.ic_back);
+        bar.addView(Sorter.button(this, "yt:" + pl.id, Sorter.YT_CODES, Sorter.YT_LABELS, "custom", this::recreate));
         ImageButton menu = Ui.icon(this, R.drawable.ic_more, 44, Ui.TEXT);
         menu.setOnClickListener(this::showMenu);
         bar.addView(menu);
@@ -82,8 +85,8 @@ public class YouTubeActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         lp2.leftMargin = Ui.dp(this, 8);
         save.setOnClickListener(v -> {
-            if (current >= 0 && current < pl.ytItems.size()) {
-                Saver.start(this, pl.ytItems.get(current).videoId);
+            if (current >= 0 && current < items.size()) {
+                Saver.start(this, items.get(current).videoId);
             } else {
                 Toast.makeText(this, "Play a video first, or tap and hold a video in the list", Toast.LENGTH_LONG).show();
             }
@@ -97,13 +100,13 @@ public class YouTubeActivity extends Activity {
         ListView list = new ListView(this);
         list.setDivider(null);
         adapter = new BaseAdapter() {
-            @Override public int getCount() { return pl.ytItems.size(); }
-            @Override public Object getItem(int i) { return pl.ytItems.get(i); }
+            @Override public int getCount() { return items.size(); }
+            @Override public Object getItem(int i) { return items.get(i); }
             @Override public long getItemId(int i) { return i; }
 
             @Override
             public View getView(int i, View convert, ViewGroup parent) {
-                Library.YtItem it = pl.ytItems.get(i);
+                Library.YtItem it = items.get(i);
                 LinearLayout row = Ui.row(YouTubeActivity.this);
                 row.setPadding(Ui.dp(YouTubeActivity.this, 16), Ui.dp(YouTubeActivity.this, 8),
                         Ui.dp(YouTubeActivity.this, 16), Ui.dp(YouTubeActivity.this, 8));
@@ -126,7 +129,7 @@ public class YouTubeActivity extends Activity {
             js("playAt(" + pos + ")");
         });
         list.setOnItemLongClickListener((p, v, pos, id) -> {
-            Library.YtItem it = pl.ytItems.get(pos);
+            Library.YtItem it = items.get(pos);
             new AlertDialog.Builder(this).setTitle(it.title)
                     .setItems(new String[]{"Download (audio or video)", "Open in YouTube"}, (d, which) -> {
                         if (which == 0) Saver.start(this, it.videoId);
@@ -165,7 +168,7 @@ public class YouTubeActivity extends Activity {
         }, "Android");
 
         JSONArray ids = new JSONArray();
-        for (Library.YtItem it : pl.ytItems) ids.put(it.videoId);
+        for (Library.YtItem it : items) ids.put(it.videoId);
         String js = "var ids=" + ids + ";"
                 + "function ready(){player.cuePlaylist(ids,0);}"
                 + "function playAt(i){player.loadPlaylist(ids,i);}"

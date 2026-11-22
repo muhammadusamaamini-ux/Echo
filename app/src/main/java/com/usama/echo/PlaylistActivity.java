@@ -42,6 +42,7 @@ public class PlaylistActivity extends Activity {
         root.setBackgroundColor(Ui.BG);
 
         LinearLayout bar = Ui.topBar(this, "", R.drawable.ic_back);
+        bar.addView(Sorter.button(this, "pl:" + pl.id, Sorter.SONG_CODES, Sorter.SONG_LABELS, "custom", this::refresh)); // this folder's own sort
         viewToggle = ListGrid.toggleButton(this, () -> listGrid.apply());
         bar.addView(viewToggle);
         ImageButton menu = Ui.icon(this, R.drawable.ic_more, 44, Ui.TEXT);
@@ -195,7 +196,7 @@ public class PlaylistActivity extends Activity {
             return;
         }
         folders = lib.visibleChildren(pl.id);
-        songs.setItems(lib.songsOf(pl));
+        songs.setItems(Sorter.songs(this, "pl:" + pl.id, "custom", lib.songsOf(pl)));
         adapter.notifyDataSetChanged();
         titleView.setText(pl.name);
         countView.setText(pl.subtitle(folders.size()) + (pl.driveFolder != null ? "  ·  Google Drive" : ""));

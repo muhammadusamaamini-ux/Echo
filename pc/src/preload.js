@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('echo', {
   waveform: call('ff:waveform'),
   frame: call('ff:frame'),
   previewFrame: call('ff:preview'),
+  fileMtimes: call('file:mtimes'),
   outSize: call('ff:outSize'),
   ffExport: call('ff:export'),
   ffCancel: call('ff:cancel'),
