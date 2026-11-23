@@ -24,6 +24,7 @@ const FEATURES = [
     '12 filters (Vivid, Black & white, Noir, Sepia, Vintage, Drama…), text with fonts, colours, outline and background, drawing with a pen',
     'Undo/redo, hold Compare to see the original; save a copy (JPG, PNG or WebP, any size) or save over the original']],
   ['▦ Collage', ['2 to 9 photos with many arrangements for each number (rows, columns, mixed rows, one big photo and the rest beside it…)',
+    '21 shaped collages for every number of photos: circle, diamond, star or hexagon in the middle, flower, heart, circle, hexagon, diamond and star mosaics, pie, sunburst, bubbles, honeycomb, slanted stripes, zigzag, waves, arches and scrapbook prints',
     'Any shape: square, 4:5, story 9:16, wide 16:9…; spacing, rounded corners and background colour',
     'Drag a photo to move it inside its box, scroll to zoom it, swap boxes, replace or remove a photo; save as JPG or PNG up to 4096 px']],
   ['⌨️ Type to jump (like File Explorer)', ['On any list, press a letter to jump to the first song, folder or video starting with it; press it again for the next one',

@@ -36,6 +36,7 @@ final class About {
                     "Saves a copy to Pictures › Echo (the original stays as it is)"},
             {"▦  Collage",
                     "2 to 9 photos with many arrangements for each number; square, post, story, wide and other shapes",
+                    "21 shaped collages: circle, diamond, star or hexagon in the middle, flower, heart, circle, hexagon, diamond and star mosaics, pie, sunburst, bubbles, honeycomb, stripes, zigzag, waves, arches, scrapbook prints",
                     "Spacing, rounded corners, background colour; drag to move a photo in its box, pinch to zoom, swap or replace photos",
                     "Saves to Pictures › Echo"},
             {"🔤  Sorting",

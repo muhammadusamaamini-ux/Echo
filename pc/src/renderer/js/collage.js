@@ -97,7 +97,7 @@ async function clAddPaths(paths) {
 /** Every box gets its own photo again (after adding or removing photos). */
 function clReset() {
   CL.cells = CL.photos.map((_, i) => ({ p: i, zoom: 1, ox: 0, oy: 0 }));
-  CL.layout = Math.min(CL.layout, Math.max(0, layoutsFor(CL.photos.length).length - 1));
+  CL.layout = Math.min(CL.layout, Math.max(0, clLayouts().length - 1));
   CL.sel = -1;
   if (NAV.view === 'collage') { main.innerHTML = ''; clBuild(); }
 }
@@ -137,15 +137,32 @@ function clBuild() {
 function clPanel() {
   const panel = CL.ui.panel;
   panel.innerHTML = '';
-  const lays = layoutsFor(CL.photos.length);
-  panel.appendChild(el('div.label', `Arrangement (${lays.length} for ${CL.photos.length} photos)`));
+  const lays = clLayouts();
+  const nBox = layoutsFor(CL.photos.length).length;
+  const [ar, br] = clSize(100);
+  const mini = (lay, i) => {
+    const box = el('div.cllay' + (CL.layout === i ? '.on' : ''), { title: lay.name || 'Boxes', onclick: () => { CL.layout = i; clPanel(); clRefresh(); } });
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${ar} ${br}`);
+    for (const c of clCells(ar, br, lay, 1.2)) {
+      const e = document.createElementNS(NS, c.kind === 'rect' ? 'rect' : 'polygon');
+      if (c.kind === 'rect') { e.setAttribute('x', c.l); e.setAttribute('y', c.t); e.setAttribute('width', Math.max(0, c.w)); e.setAttribute('height', Math.max(0, c.h)); e.setAttribute('rx', 1.5); }
+      else e.setAttribute('points', c.pts.map((p) => p.join(',')).join(' '));
+      if (c.card) e.setAttribute('class', 'card');
+      svg.appendChild(e);
+    }
+    box.appendChild(svg);
+    return box;
+  };
+  panel.appendChild(el('div.label', `Boxes (${nBox})`));
   const grid = el('div.cllays');
-  lays.forEach((lay, i) => {
-    const mini = el('div.cllay' + (CL.layout === i ? '.on' : ''), { onclick: () => { CL.layout = i; clPanel(); clRefresh(); } });
-    for (const [x, y, w, h] of lay) mini.appendChild(el('i', { style: { left: x * 100 + '%', top: y * 100 + '%', width: w * 100 + '%', height: h * 100 + '%' } }));
-    grid.appendChild(mini);
-  });
+  lays.slice(0, nBox).forEach((lay, i) => grid.appendChild(mini(lay, i)));
   panel.appendChild(grid);
+  panel.appendChild(el('div.label', `Shapes (${lays.length - nBox}) — circles, flower, heart, star, waves…`));
+  const grid2 = el('div.cllays');
+  lays.slice(nBox).forEach((lay, j) => grid2.appendChild(mini(lay, nBox + j)));
+  panel.appendChild(grid2);
   panel.appendChild(el('div.label', 'Shape'));
   const asp = el('div.row.wrap');
   for (const [k, t] of CL_ASPECTS) asp.appendChild(el('div.chip' + (CL.aspect === k ? '.on' : ''), { onclick: () => { CL.aspect = k; clPanel(); clRefresh(); } }, t));
@@ -182,26 +199,60 @@ function clSize(longSide) {
   return a >= b ? [longSide, Math.round(longSide * b / a)] : [Math.round(longSide * a / b), longSide];
 }
 
-/** Where each box is, in pixels, for a collage W×H. */
-function clBoxes(W, H) {
-  const lay = layoutsFor(CL.photos.length)[CL.layout] || [];
-  const g = CL.gap / 1000 * Math.min(W, H);
-  return lay.map(([x, y, w, h]) => {
-    const l = x * (W - g) + g, t = y * (H - g) + g;
-    return [l, t, w * (W - g) - g, h * (H - g) - g];
+/** All arrangements for the current photos: boxes first, then shapes (circles, flower, heart…). */
+let clLayCache = { key: '', list: [] };
+function clLayouts() {
+  const key = CL.photos.length + '|' + CL.aspect;
+  if (clLayCache.key === key) return clLayCache.list; // worked out once per number of photos and shape
+  const [a, b] = clSize(1000);
+  clLayCache = { key, list: [...layoutsFor(CL.photos.length).map((rects) => ({ rects })), ...shapeLayouts(CL.photos.length, a / b)] };
+  return clLayCache.list;
+}
+
+/** Where each photo goes, in pixels, for a collage W×H: boxes {kind:'rect', l, t, w, h} or shapes {kind:'poly', pts, card}. */
+function clCells(W, H, lay, gapPx) {
+  lay = lay || clLayouts()[CL.layout] || clLayouts()[0];
+  if (!lay) return [];
+  const g = gapPx != null ? gapPx : CL.gap / 1000 * Math.min(W, H);
+  if (lay.rects) return lay.rects.map(([x, y, w, h]) => ({ kind: 'rect', l: x * (W - g) + g, t: y * (H - g) + g, w: w * (W - g) - g, h: h * (H - g) - g }));
+  return lay.cells.map((c) => {
+    const pts = c.pts.map(([x, y]) => [x * W, y * H]);
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const l = Math.min(...xs), t = Math.min(...ys);
+    return { kind: 'poly', pts, card: !!c.card, l, t, w: Math.max(...xs) - l, h: Math.max(...ys) - t };
   });
+}
+const clPath = (x, pts) => { x.beginPath(); pts.forEach(([a, b], i) => (i ? x.lineTo(a, b) : x.moveTo(a, b))); x.closePath(); };
+function clInside(c, px, py) {
+  if (c.kind === 'rect') return px >= c.l && px <= c.l + c.w && py >= c.t && py <= c.t + c.h;
+  let inside = false;
+  for (let i = 0, j = c.pts.length - 1; i < c.pts.length; j = i++) {
+    const [xi, yi] = c.pts[i], [xj, yj] = c.pts[j];
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
 }
 
 function clDraw(x, W, H, forSave) {
   x.fillStyle = CL.bg;
   x.fillRect(0, 0, W, H);
   const r = CL.radius / 1000 * Math.min(W, H);
-  clBoxes(W, H).forEach(([l, t, w, h], i) => {
+  const g = CL.gap / 1000 * Math.min(W, H);
+  clCells(W, H).forEach((c, i) => {
     const cell = CL.cells[i];
     const ph = cell && CL.photos[cell.p];
+    let { l, t, w, h } = c;
     x.save();
-    x.beginPath();
-    if (x.roundRect) x.roundRect(l, t, w, h, r); else x.rect(l, t, w, h);
+    if (c.kind === 'rect') { x.beginPath(); if (x.roundRect) x.roundRect(l, t, w, h, r); else x.rect(l, t, w, h); }
+    else if (c.card) { // a photo print: white frame and a soft shadow
+      x.save(); x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = Math.min(W, H) * 0.02; x.shadowOffsetY = Math.min(W, H) * 0.006;
+      clPath(x, c.pts); x.fillStyle = '#fff'; x.fill(); x.restore();
+      const cx = c.pts.reduce((a, p) => a + p[0], 0) / 4, cy = c.pts.reduce((a, p) => a + p[1], 0) / 4;
+      const inner = c.pts.map(([a, b]) => [cx + (a - cx) * 0.9, cy + (b - cy) * 0.9]);
+      clPath(x, inner);
+      const xs = inner.map((p) => p[0]), ys = inner.map((p) => p[1]);
+      l = Math.min(...xs); t = Math.min(...ys); w = Math.max(...xs) - l; h = Math.max(...ys) - t;
+    } else clPath(x, c.pts);
     x.clip();
     if (ph && ph.img.complete && ph.img.naturalWidth) {
       const iw = ph.img.naturalWidth, ih = ph.img.naturalHeight;
@@ -212,7 +263,14 @@ function clDraw(x, W, H, forSave) {
       x.drawImage(ph.img, l - ex + cell.ox * ex, t - ey + cell.oy * ey, dw, dh);
     } else { x.fillStyle = 'rgba(128,128,128,.25)'; x.fillRect(l, t, w, h); }
     x.restore();
-    if (!forSave && i === CL.sel) { x.save(); x.strokeStyle = '#00e5ff'; x.lineWidth = 3; x.setLineDash([8, 5]); x.strokeRect(l + 1.5, t + 1.5, w - 3, h - 3); x.restore(); }
+    if (c.kind === 'poly' && !c.card && g > 0) { // spacing between shapes
+      x.save(); clPath(x, c.pts); x.strokeStyle = CL.bg; x.lineWidth = g; x.lineJoin = 'round'; x.stroke(); x.restore();
+    }
+    if (!forSave && i === CL.sel) {
+      x.save(); x.strokeStyle = '#00e5ff'; x.lineWidth = 3; x.setLineDash([8, 5]);
+      if (c.kind === 'rect') x.strokeRect(l + 1.5, t + 1.5, w - 3, h - 3); else { clPath(x, c.pts); x.stroke(); }
+      x.restore();
+    }
   });
 }
 
@@ -240,7 +298,9 @@ function clStageEvents() {
   const hit = (e) => {
     const r = canvas.getBoundingClientRect();
     const px = e.clientX - r.left, py = e.clientY - r.top;
-    return clBoxes(CL.view.W, CL.view.H).findIndex(([l, t, w, h]) => px >= l && px <= l + w && py >= t && py <= t + h);
+    const cells = clCells(CL.view.W, CL.view.H);
+    for (let i = cells.length - 1; i >= 0; i--) if (clInside(cells[i], px, py)) return i; // the top one first (e.g. the circle in the middle)
+    return -1;
   };
   let drag = null;
   canvas.addEventListener('pointerdown', (e) => {
@@ -252,7 +312,7 @@ function clStageEvents() {
       CL.swap = false; CL.sel = i; clPanel(); clRefresh(); return;
     }
     if (CL.sel !== i) { CL.sel = i; CL.swap = false; clPanel(); }
-    const [, , w, h] = clBoxes(CL.view.W, CL.view.H)[i];
+    const { w, h } = clCells(CL.view.W, CL.view.H)[i];
     drag = { i, x: e.clientX, y: e.clientY, ox: CL.cells[i].ox, oy: CL.cells[i].oy, w, h };
     canvas.setPointerCapture(e.pointerId);
     clRefresh();

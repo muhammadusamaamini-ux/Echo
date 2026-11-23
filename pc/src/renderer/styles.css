@@ -369,3 +369,7 @@ body.fullscreen #vplayer { position: fixed; }
 .cllay i { position: absolute; box-sizing: border-box; border: 2px solid #12121f; background: rgba(160,150,255,.55); border-radius: 3px; }
 .cllay.on i { background: rgba(0,229,255,.6); }
 input[type=color] { width: 30px; height: 30px; border: 0; padding: 0; background: none; cursor: pointer; }
+.cllay svg { position: absolute; inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); }
+.cllay svg rect, .cllay svg polygon { fill: rgba(160,150,255,.6); stroke: #12121f; stroke-width: .8; }
+.cllay svg .card { fill: rgba(255,255,255,.85); stroke: rgba(0,0,0,.4); }
+.cllay.on svg rect, .cllay.on svg polygon { fill: rgba(0,229,255,.65); }

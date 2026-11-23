@@ -145,7 +145,7 @@ public class CollageActivity extends Activity {
     private void resetCells() {
         cells.clear();
         for (int i = 0; i < bmps.size(); i++) { Cell c = new Cell(); c.p = i; cells.add(c); }
-        layout = Math.min(layout, Math.max(0, Photos.layouts(bmps.size()).size() - 1));
+        layout = Math.min(layout, Math.max(0, allLayouts().size() - 1));
         sel = -1;
         swapping = false;
         refreshAll();
@@ -165,31 +165,116 @@ public class CollageActivity extends Activity {
         return a >= b ? new int[]{longSide, Math.round(longSide * b / a)} : new int[]{Math.round(longSide * a / b), longSide};
     }
 
-    private List<RectF> boxes(float W, float H) {
-        List<RectF> out = new ArrayList<>();
-        List<float[][]> lays = Photos.layouts(bmps.size());
-        if (lays.isEmpty()) return out;
-        float[][] lay = lays.get(Math.min(layout, lays.size() - 1));
-        float g = gap / 1000f * Math.min(W, H);
-        for (float[] r : lay) {
-            float l = r[0] * (W - g) + g, t = r[1] * (H - g) + g;
-            out.add(new RectF(l, t, l + r[2] * (W - g) - g, t + r[3] * (H - g) - g));
+    /** An arrangement: boxes (rects) or shapes (circles, flower, heart…). */
+    static final class Lay {
+        float[][] rects;
+        CShapes.Layout shape;
+    }
+
+    /** Where a photo goes, in pixels. */
+    static final class Geo {
+        RectF box;          // the photo's area (for shapes: around the shape)
+        Path path;          // shapes only
+        float[][] pts;      // shapes only
+        boolean card;
+    }
+
+    private List<Lay> layCache;
+    private String layKey = "";
+
+    private List<Lay> allLayouts() {
+        String key = bmps.size() + "|" + aspect;
+        if (layCache != null && key.equals(layKey)) return layCache; // worked out once per number of photos and shape
+        layKey = key;
+        List<Lay> out = new ArrayList<>();
+        layCache = out;
+        for (float[][] r : Photos.layouts(bmps.size())) { Lay l = new Lay(); l.rects = r; out.add(l); }
+        int[] s = size(1000);
+        for (CShapes.Layout sh : CShapes.layouts(bmps.size(), (double) s[0] / s[1])) { Lay l = new Lay(); l.shape = sh; out.add(l); }
+        return out;
+    }
+
+    private int boxCount() { return Photos.layouts(bmps.size()).size(); }
+
+    private List<Geo> cells(float W, float H, Lay lay, float g) {
+        List<Geo> out = new ArrayList<>();
+        if (lay == null) return out;
+        if (lay.rects != null) {
+            for (float[] r : lay.rects) {
+                Geo o = new Geo();
+                float l = r[0] * (W - g) + g, t = r[1] * (H - g) + g;
+                o.box = new RectF(l, t, l + r[2] * (W - g) - g, t + r[3] * (H - g) - g);
+                out.add(o);
+            }
+            return out;
+        }
+        for (CShapes.Cell c : lay.shape.cells) {
+            Geo o = new Geo();
+            o.card = c.card;
+            o.pts = new float[c.pts.length][];
+            o.path = new Path();
+            float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+            for (int i = 0; i < c.pts.length; i++) {
+                float x = c.pts[i][0] * W, y = c.pts[i][1] * H;
+                o.pts[i] = new float[]{x, y};
+                if (i == 0) o.path.moveTo(x, y); else o.path.lineTo(x, y);
+                x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+            }
+            o.path.close();
+            o.box = new RectF(x0, y0, x1, y1);
+            out.add(o);
         }
         return out;
     }
 
+    private List<Geo> cells(float W, float H) {
+        List<Lay> all = allLayouts();
+        if (all.isEmpty()) return new ArrayList<>();
+        return cells(W, H, all.get(Math.min(layout, all.size() - 1)), gap / 1000f * Math.min(W, H));
+    }
+
+    private static boolean inside(Geo c, float px, float py) {
+        if (c.pts == null) return c.box.contains(px, py);
+        boolean in = false;
+        for (int i = 0, j = c.pts.length - 1; i < c.pts.length; j = i++) {
+            float xi = c.pts[i][0], yi = c.pts[i][1], xj = c.pts[j][0], yj = c.pts[j][1];
+            if ((yi > py) != (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) in = !in;
+        }
+        return in;
+    }
+
     private void drawCollage(Canvas c, float W, float H, boolean forSave) {
         c.drawColor(bg);
-        float rad = radius / 1000f * Math.min(W, H);
-        List<RectF> bx = boxes(W, H);
+        float rad = radius / 1000f * Math.min(W, H), g = gap / 1000f * Math.min(W, H);
+        List<Geo> geo = cells(W, H);
         Paint p = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
-        for (int i = 0; i < bx.size() && i < cells.size(); i++) {
-            RectF r = bx.get(i);
+        for (int i = 0; i < geo.size() && i < cells.size(); i++) {
+            Geo o = geo.get(i);
             Cell cell = cells.get(i);
             Bitmap bmp = bmps.get(cell.p);
+            RectF r = new RectF(o.box);
             c.save();
-            Path clip = new Path();
-            clip.addRoundRect(r, rad, rad, Path.Direction.CW);
+            Path clip;
+            if (o.path == null) {
+                clip = new Path();
+                clip.addRoundRect(r, rad, rad, Path.Direction.CW);
+            } else if (o.card) { // a photo print: white frame with a soft shadow
+                Paint frame = new Paint(Paint.ANTI_ALIAS_FLAG);
+                frame.setColor(Color.WHITE);
+                frame.setShadowLayer(Math.min(W, H) * 0.02f, 0, Math.min(W, H) * 0.006f, 0x59000000);
+                c.drawPath(o.path, frame);
+                float cx = 0, cy = 0;
+                for (float[] pt : o.pts) { cx += pt[0] / o.pts.length; cy += pt[1] / o.pts.length; }
+                clip = new Path();
+                float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+                for (int k = 0; k < o.pts.length; k++) {
+                    float x = cx + (o.pts[k][0] - cx) * 0.9f, y = cy + (o.pts[k][1] - cy) * 0.9f;
+                    if (k == 0) clip.moveTo(x, y); else clip.lineTo(x, y);
+                    x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+                }
+                clip.close();
+                r = new RectF(x0, y0, x1, y1);
+            } else clip = o.path;
             c.clipPath(clip);
             float k = Math.max(r.width() / bmp.getWidth(), r.height() / bmp.getHeight()) * cell.zoom;
             float dw = bmp.getWidth() * k, dh = bmp.getHeight() * k;
@@ -197,13 +282,21 @@ public class CollageActivity extends Activity {
             float left = r.left - ex + cell.ox * ex, top = r.top - ey + cell.oy * ey;
             c.drawBitmap(bmp, null, new RectF(left, top, left + dw, top + dh), p);
             c.restore();
+            if (o.path != null && !o.card && g > 0) { // spacing between shapes
+                Paint gp = new Paint(Paint.ANTI_ALIAS_FLAG);
+                gp.setStyle(Paint.Style.STROKE);
+                gp.setStrokeJoin(Paint.Join.ROUND);
+                gp.setStrokeWidth(g);
+                gp.setColor(bg);
+                c.drawPath(o.path, gp);
+            }
             if (!forSave && i == sel) {
-                Paint s = new Paint(Paint.ANTI_ALIAS_FLAG);
-                s.setStyle(Paint.Style.STROKE);
-                s.setStrokeWidth(Ui.dp(this, 3));
-                s.setColor(swapping ? 0xFFFFD400 : Ui.ACCENT);
-                s.setPathEffect(new DashPathEffect(new float[]{16, 10}, 0));
-                c.drawRoundRect(r, rad, rad, s);
+                Paint sp = new Paint(Paint.ANTI_ALIAS_FLAG);
+                sp.setStyle(Paint.Style.STROKE);
+                sp.setStrokeWidth(Ui.dp(this, 3));
+                sp.setColor(swapping ? 0xFFFFD400 : Ui.ACCENT);
+                sp.setPathEffect(new DashPathEffect(new float[]{16, 10}, 0));
+                if (o.path != null) c.drawPath(o.path, sp); else c.drawRoundRect(o.box, rad, rad, sp);
             }
         }
     }
@@ -252,8 +345,8 @@ public class CollageActivity extends Activity {
         }
 
         private int hit(float x, float y) {
-            List<RectF> bx = boxes(area.width(), area.height());
-            for (int i = 0; i < bx.size(); i++) if (bx.get(i).contains(x - area.left, y - area.top)) return i;
+            List<Geo> g = cells(area.width(), area.height());
+            for (int i = g.size() - 1; i >= 0; i--) if (inside(g.get(i), x - area.left, y - area.top)) return i; // the top one first
             return -1;
         }
 
@@ -286,7 +379,7 @@ public class CollageActivity extends Activity {
                     if (dragCell < 0 || e.getPointerCount() > 1 || scaler.isInProgress()) return true;
                     Cell cell = cells.get(dragCell);
                     Bitmap bmp = bmps.get(cell.p);
-                    RectF r = boxes(area.width(), area.height()).get(dragCell);
+                    RectF r = cells(area.width(), area.height()).get(dragCell).box;
                     float k = Math.max(r.width() / bmp.getWidth(), r.height() / bmp.getHeight()) * cell.zoom;
                     float ex = Math.max(1, (bmp.getWidth() * k - r.width()) / 2), ey = Math.max(1, (bmp.getHeight() * k - r.height()) / 2);
                     cell.ox = Math.max(-1, Math.min(1, cell.ox + (e.getX() - lx) / ex));
@@ -309,10 +402,10 @@ public class CollageActivity extends Activity {
 
     /** A small picture of an arrangement. */
     private class LayoutThumb extends View {
-        final float[][] lay;
+        final Lay lay;
         final boolean on;
 
-        LayoutThumb(Context c, float[][] lay, boolean on) { super(c); this.lay = lay; this.on = on; }
+        LayoutThumb(Context c, Lay lay, boolean on) { super(c); this.lay = lay; this.on = on; }
 
         @Override
         protected void onDraw(Canvas c) {
@@ -322,7 +415,20 @@ public class CollageActivity extends Activity {
             c.drawRoundRect(0, 0, w, h, g * 2, g * 2, bgp);
             Paint box = new Paint(Paint.ANTI_ALIAS_FLAG);
             box.setColor(on ? 0xFF003A44 : 0xFF6E63C8);
-            for (float[] r : lay) c.drawRoundRect(r[0] * w + g, r[1] * h + g, (r[0] + r[2]) * w - g, (r[1] + r[3]) * h - g, g, g, box);
+            Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
+            edge.setStyle(Paint.Style.STROKE);
+            edge.setStrokeWidth(g * 0.6f);
+            edge.setColor(0xFF12121F);
+            c.save();
+            c.translate(g, g);
+            for (Geo o : cells(w - 2 * g, h - 2 * g, lay, g * 0.8f)) {
+                if (o.path == null) c.drawRoundRect(o.box, g, g, box);
+                else {
+                    if (o.card) { Paint cp = new Paint(box); cp.setColor(0xDDFFFFFF); c.drawPath(o.path, cp); } else c.drawPath(o.path, box);
+                    c.drawPath(o.path, edge);
+                }
+            }
+            c.restore();
         }
     }
 
@@ -394,18 +500,28 @@ public class CollageActivity extends Activity {
             addPill(r, "Done", true, v -> { sel = -1; swapping = false; fillPanel(); cv.invalidate(); });
             box.addView(hscroll(r));
         }
-        List<float[][]> lays = Photos.layouts(bmps.size());
-        box.addView(label("ARRANGEMENT (" + lays.size() + " FOR " + bmps.size() + " PHOTOS)"));
-        LinearLayout lr = row();
-        for (int i = 0; i < lays.size(); i++) {
-            final int k = i;
-            LayoutThumb t = new LayoutThumb(this, lays.get(i), i == layout);
-            t.setOnClickListener(v -> { layout = k; fillPanel(); cv.invalidate(); });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Ui.dp(this, 54), Ui.dp(this, 54));
-            lp.rightMargin = Ui.dp(this, 8);
-            lr.addView(t, lp);
+        List<Lay> lays = allLayouts();
+        int nBox = boxCount();
+        for (int section = 0; section < 2; section++) {
+            box.addView(label(section == 0 ? "BOXES (" + nBox + ")" : "SHAPES (" + (lays.size() - nBox) + ") — CIRCLES, FLOWER, HEART, STAR, WAVES…"));
+            LinearLayout lr = row();
+            int from = section == 0 ? 0 : nBox, to = section == 0 ? nBox : lays.size();
+            for (int i = from; i < to; i++) {
+                final int k = i;
+                LayoutThumb t = new LayoutThumb(this, lays.get(i), i == layout);
+                if (lays.get(i).shape != null) t.setContentDescription(lays.get(i).shape.name);
+                t.setOnClickListener(v -> {
+                    layout = k;
+                    fillPanel();
+                    cv.invalidate();
+                    if (lays.get(k).shape != null) Toast.makeText(this, lays.get(k).shape.name, Toast.LENGTH_SHORT).show();
+                });
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Ui.dp(this, 54), Ui.dp(this, 54));
+                lp.rightMargin = Ui.dp(this, 8);
+                lr.addView(t, lp);
+            }
+            box.addView(hscroll(lr));
         }
-        box.addView(hscroll(lr));
         box.addView(label("SHAPE"));
         LinearLayout ar = row();
         for (int i = 0; i < ASPECTS.length; i++) {
