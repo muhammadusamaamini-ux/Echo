@@ -23,6 +23,10 @@ function tabTitle(t) {
     case 'folder': case 'youtube': return (playlist(a) || {}).name || 'Folder';
     case 'videos': return a && a.folder ? a.folder.split(/[\\/]/).pop() : 'Videos';
     case 'veditor': return 'Video editor';
+    case 'photos': return a && a.folder ? a.folder.split(/[\\/]/).pop() : 'Photos';
+    case 'photo': return (a && a.list && a.list[a.i] && a.list[a.i].name) || 'Photo';
+    case 'peditor': return 'Photo editor';
+    case 'collage': return 'Collage';
     case 'aeditor': return 'Audio editor';
     case 'ytweb': return t.webTitle || 'YouTube';
     case 'video': return (a && a.list && a.list[a.i] && a.list[a.i].name) || 'Video';
@@ -30,7 +34,7 @@ function tabTitle(t) {
   }
 }
 const TAB_ICONS = { home: 'home', search: 'search', library: 'library', songs: 'music', folder: 'folder', youtube: 'yt', ytweb: 'yt',
-  videos: 'movie', video: 'movie', veditor: 'cut', aeditor: 'wave' };
+  videos: 'movie', video: 'movie', veditor: 'cut', aeditor: 'wave', photos: 'image', photo: 'image', peditor: 'image', collage: 'grid' };
 
 function renderTabBar() {
   const bar = $('#tabbar');

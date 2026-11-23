@@ -16,6 +16,16 @@ const FEATURES = [
     'Play, queue, add/move to a folder, or remove the selected songs from Echo']],
   ['💻 Music on this PC', ['Import a whole music folder: its sub-folders become folders in Echo', 'Stays in sync: new, renamed and deleted files show up automatically', 'Or pick single songs']],
   ['☁️ Google Drive', ['Paste a folder link shared as "Anyone with the link"; songs play online', 'Sub-folders keep their structure', 'Syncs when Echo opens and every hour, or with Sync now']],
+  ['🖼️ Photos', ['Sidebar → Photos: your pictures by folder (Pictures, Desktop and Downloads, or folders you add), with sort and type-to-jump',
+    'Viewer: ← → next/previous, zoom with the scroll wheel or double-click, drag to look around, slideshow, Delete moves to the Recycle Bin',
+    'Select several photos to delete them or make a collage']],
+  ['✏️ Photo editor', ['Crop (free or square, 4:5, 9:16, 16:9…), turn, flip, straighten',
+    'Brightness, exposure, contrast, saturation, warmth, tint, fade, vignette, sharpen, blur',
+    '12 filters (Vivid, Black & white, Noir, Sepia, Vintage, Drama…), text with fonts, colours, outline and background, drawing with a pen',
+    'Undo/redo, hold Compare to see the original; save a copy (JPG, PNG or WebP, any size) or save over the original']],
+  ['▦ Collage', ['2 to 9 photos with many arrangements for each number (rows, columns, mixed rows, one big photo and the rest beside it…)',
+    'Any shape: square, 4:5, story 9:16, wide 16:9…; spacing, rounded corners and background colour',
+    'Drag a photo to move it inside its box, scroll to zoom it, swap boxes, replace or remove a photo; save as JPG or PNG up to 4096 px']],
   ['⌨️ Type to jump (like File Explorer)', ['On any list, press a letter to jump to the first song, folder or video starting with it; press it again for the next one',
     'Type a few letters quickly to match more of the name; Enter opens or plays it',
     'Shuffle is now Ctrl+S and repeat is Ctrl+R (so every letter can be used for jumping)']],
@@ -123,6 +133,8 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (typing) return;
+  if (NAV.view === 'photo' && PV.keys && PV.keys(e)) return; // the photo viewer's keys
+  if ((NAV.view === 'peditor' && typeof peKeys === 'function' && peKeys(e)) || (NAV.view === 'collage' && typeof clKeys === 'function' && clKeys(e))) return;
   if (NAV.view === 'aeditor' && $('#aePlayer')) {
     if (e.key === ' ') { e.preventDefault(); const p = $('#aePlayer'); if (p.paused) p.play(); else p.pause(); return; }
     if (e.key === '[') { startHere(); return; }

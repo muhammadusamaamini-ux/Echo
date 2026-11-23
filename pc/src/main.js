@@ -108,7 +108,7 @@ ipcMain.handle('lib:save', (e, data) => {
 });
 ipcMain.handle('app:pendingFiles', () => { const f = pendingFiles; pendingFiles = []; return f; });
 ipcMain.handle('app:info', () => ({ version: app.getVersion(), videos: app.getPath('videos'), music: app.getPath('music'),
-  downloads: app.getPath('downloads'), ffmpeg: ff.bin() }));
+  downloads: app.getPath('downloads'), pictures: app.getPath('pictures'), desktop: app.getPath('desktop'), ffmpeg: ff.bin() }));
 
 // ---------- files ----------
 ipcMain.handle('dialog:open', async (e, opts) => {
@@ -136,6 +136,7 @@ ipcMain.handle('file:writeTemp', (e, name, dataUrl) => {
 ipcMain.handle('file:writeData', (e, p, dataUrl) => { fs.writeFileSync(p, Buffer.from(dataUrl.split(',')[1], 'base64')); return p; });
 ipcMain.handle('file:readText', (e, p) => fs.readFileSync(p, 'utf8'));
 ipcMain.handle('file:delete', (e, p) => { try { fs.unlinkSync(p); return true; } catch (err) { return false; } });
+ipcMain.handle('file:trash', async (e, p) => { try { await shell.trashItem(p); return true; } catch (err) { return false; } });
 ipcMain.handle('shell:show', (e, p) => shell.showItemInFolder(p));
 ipcMain.handle('shell:open', (e, url) => shell.openExternal(url));
 ipcMain.handle('shell:openPath', (e, p) => shell.openPath(p));
@@ -144,6 +145,27 @@ ipcMain.handle('win:progress', (e, v) => { win.setProgressBar(v); });
 
 ipcMain.handle('scan:music', (e, dir) => scan.musicTree(dir));
 ipcMain.handle('scan:videos', async (e, dirs) => (await scan.videos(dirs)).map((v) => ({ ...v, url: pathToFileURL(v.path).href })));
+ipcMain.handle('scan:images', async (e, dirs) => (await scan.images(dirs)).map((v) => ({ ...v, url: pathToFileURL(v.path).href })));
+// small pictures for the Photos grid (Windows makes them quickly; kept on disk so they're instant next time)
+ipcMain.handle('img:thumb', async (e, p, mtime) => {
+  const dir = path.join(userData(), 'photo-thumbs');
+  const out = path.join(dir, crypto.createHash('md5').update(p + '|' + mtime).digest('hex') + '.jpg');
+  if (fs.existsSync(out)) return pathToFileURL(out).href;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    let img = null;
+    try { img = await nativeImage.createThumbnailFromPath(p, { width: 360, height: 360 }); } catch (err) { /* not on this PC */ }
+    if (!img || img.isEmpty()) {
+      img = nativeImage.createFromPath(p);
+      if (img.isEmpty()) return pathToFileURL(p).href;
+      const s = img.getSize();
+      const k = 360 / Math.max(s.width, s.height);
+      if (k < 1) img = img.resize({ width: Math.round(s.width * k), height: Math.round(s.height * k), quality: 'good' });
+    }
+    fs.writeFileSync(out, img.toJPEG(82));
+    return pathToFileURL(out).href;
+  } catch (err) { return pathToFileURL(p).href; }
+});
 
 // Song details (title, artist, album, length) from the file's tags
 let mm = null;

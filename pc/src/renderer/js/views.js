@@ -38,6 +38,10 @@ function render() {
   else if (v === 'videos') videosView(NAV.arg);
   else if (v === 'veditor') videoEditorView(NAV.arg);
   else if (v === 'aeditor') audioEditorView(NAV.arg);
+  else if (v === 'photos') photosView(NAV.arg);
+  else if (v === 'photo') photoView(NAV.arg);
+  else if (v === 'peditor') photoEditorView(NAV.arg);
+  else if (v === 'collage') collageView(NAV.arg);
   // 'ytweb' (YouTube) and 'video' (the player) are shown by tabs.js
   markPlaying();
 }

@@ -6,7 +6,7 @@ const api = window.echo;
 
 const L = {
   songs: [], playlists: [], recent: [],
-  videoDirs: [], prefs: { grid: false, volume: 0.8, videoBackground: false },
+  videoDirs: [], photoDirs: [], prefs: { grid: false, volume: 0.8, videoBackground: false },
   videoResume: {},
 };
 const byId = new Map();
@@ -20,6 +20,7 @@ async function loadLibrary() {
     L.playlists = d.playlists || [];
     L.recent = d.recent || [];
     L.videoDirs = d.videoDirs || [];
+    L.photoDirs = d.photoDirs || [];
     L.prefs = Object.assign(L.prefs, d.prefs || {});
     L.videoResume = d.videoResume || {};
   }
