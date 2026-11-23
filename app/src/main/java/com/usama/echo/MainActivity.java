@@ -114,6 +114,11 @@ public class MainActivity extends Activity {
             chipRow.addView(t, lp);
             chips[i] = t;
         }
+        TextView photosChip = Ui.text(this, "Photos", 14, Ui.TEXT, true); // opens Photos (viewer, editor, collage)
+        photosChip.setPadding(Ui.dp(this, 18), Ui.dp(this, 8), Ui.dp(this, 18), Ui.dp(this, 8));
+        photosChip.setBackground(Ui.glass(this, 20));
+        photosChip.setOnClickListener(v -> startActivity(new Intent(this, PhotosActivity.class)));
+        chipRow.addView(photosChip);
         chipScroll.addView(chipRow);
         root.addView(chipScroll);
 

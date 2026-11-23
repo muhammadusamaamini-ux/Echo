@@ -21,6 +21,7 @@
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <!-- Videos tab -->
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
@@ -58,6 +59,10 @@
 
         <activity android:name=".PlaylistActivity" android:exported="false" />
         <activity android:name=".VideoListActivity" android:exported="false" />
+        <activity android:name=".PhotosActivity" android:exported="false" />
+        <activity android:name=".PhotoViewerActivity" android:exported="false" android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+        <activity android:name=".PhotoEditorActivity" android:exported="false" />
+        <activity android:name=".CollageActivity" android:exported="false" />
         <activity android:name=".AudioEditorActivity" android:exported="false" />
         <activity
             android:name=".EditorActivity"
