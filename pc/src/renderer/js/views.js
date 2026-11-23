@@ -630,3 +630,46 @@ function typeJumpOpen() {
   return true;
 }
 document.addEventListener('mousedown', () => { if (TJ.el) TJ.el.classList.remove('tjfocus'); });
+
+// ---------- arrow keys (like File Explorer) ----------
+// ↑ ↓ ← → move the highlight between folders, songs, videos and photos (in a grid by position, in a list up and down);
+// Enter opens or plays it, Home/End go to the first/last, Backspace goes back.
+function keyMove(key) {
+  const items = typeJumpItems();
+  if (!items.length) return false;
+  let cur = TJ.el && document.body.contains(TJ.el) && TJ.el.classList.contains('tjfocus') ? TJ.el : null;
+  let next = null;
+  if (!cur || key === 'Home') next = key === 'End' ? items[items.length - 1] : (cur ? items[0] : items.find((n) => n.getBoundingClientRect().bottom > 60) || items[0]);
+  else if (key === 'End') next = items[items.length - 1];
+  else {
+    const r = cur.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const idx = items.indexOf(cur);
+    if (key === 'ArrowLeft' || key === 'ArrowRight') {
+      // the next one on the same row; at the end of a row, the next/previous item in order
+      const d = key === 'ArrowRight' ? 1 : -1;
+      const cand = items[idx + d];
+      if (cand) next = cand;
+    } else {
+      const down = key === 'ArrowDown';
+      let best = null, bestScore = Infinity;
+      for (const n of items) {
+        if (n === cur) continue;
+        const q = n.getBoundingClientRect();
+        const qy = q.top + q.height / 2, qx = q.left + q.width / 2;
+        const dy = down ? qy - cy : cy - qy;
+        if (dy < Math.min(r.height, q.height) * 0.5) continue; // must be on a row below/above
+        const score = dy * 4 + Math.abs(qx - cx);
+        if (score < bestScore) { bestScore = score; best = n; }
+      }
+      next = best;
+    }
+  }
+  if (!next) return true;
+  if (TJ.el) TJ.el.classList.remove('tjfocus');
+  TJ.el = next;
+  TJ.text = '';
+  next.classList.add('tjfocus');
+  next.scrollIntoView({ block: 'nearest' });
+  return true;
+}

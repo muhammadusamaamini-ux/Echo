@@ -28,7 +28,8 @@ const FEATURES = [
     'Drag a photo to move it inside its box, scroll to zoom it, swap boxes, replace or remove a photo; save as JPG or PNG up to 4096 px']],
   ['⌨️ Type to jump (like File Explorer)', ['On any list, press a letter to jump to the first song, folder or video starting with it; press it again for the next one',
     'Type a few letters quickly to match more of the name; Enter opens or plays it',
-    'Shuffle is now Ctrl+S and repeat is Ctrl+R (so every letter can be used for jumping)']],
+    'Arrow keys move the highlight between folders and files (like File Explorer), Enter opens, Backspace goes back, Home/End: first/last',
+    'Shuffle is Ctrl+S, repeat is Ctrl+R, and Shift+← → skip back/forward 5 seconds in a song']],
   ['🗂️ Tabs (like File Explorer)', ['Every tab is its own Echo window: whatever you open in it (Home, a folder, Videos, a player, YouTube) shows there with its name',
     '+ or Ctrl+T: new tab · right-click a tab: Duplicate, Close, Close other tabs · Ctrl+W or middle-click: close · Ctrl+Tab: next tab',
     'The ← at the left of the tabs goes back to the previous page (Alt+← and the mouse\'s back button too); closing a video returns to the same place in the list',
@@ -148,8 +149,11 @@ document.addEventListener('keydown', (e) => {
   else if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); go('search'); }
   else if (e.ctrlKey && e.key === 'ArrowRight') next(false);
   else if (e.ctrlKey && e.key === 'ArrowLeft') prev();
-  else if (e.key === 'ArrowRight' && P.song) audio.currentTime += 5;
-  else if (e.key === 'ArrowLeft' && P.song) audio.currentTime -= 5;
+  else if (e.shiftKey && e.key === 'ArrowRight' && P.song) audio.currentTime += 5;
+  else if (e.shiftKey && e.key === 'ArrowLeft' && P.song) audio.currentTime -= 5;
+  else if (/^Arrow(Up|Down|Left|Right)$/.test(e.key) && !e.ctrlKey && !e.altKey) { if (keyMove(e.key)) e.preventDefault(); } // like File Explorer
+  else if ((e.key === 'Home' || e.key === 'End') && !e.ctrlKey && keyMove(e.key)) e.preventDefault();
+  else if (e.key === 'Backspace' && !e.ctrlKey) { e.preventDefault(); goBack(); }
   else if ((e.key === 's' || e.key === 'S') && e.ctrlKey) { e.preventDefault(); toggleShuffle(); }
   else if ((e.key === 'r' || e.key === 'R') && e.ctrlKey) { e.preventDefault(); cycleRepeat(); }
   else if (e.key === 'Enter' && typeJumpOpen()) e.preventDefault();
