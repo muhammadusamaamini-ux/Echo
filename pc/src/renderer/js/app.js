@@ -16,6 +16,9 @@ const FEATURES = [
     'Play, queue, add/move to a folder, or remove the selected songs from Echo']],
   ['💻 Music on this PC', ['Import a whole music folder: its sub-folders become folders in Echo', 'Stays in sync: new, renamed and deleted files show up automatically', 'Or pick single songs']],
   ['☁️ Google Drive', ['Paste a folder link shared as "Anyone with the link"; songs play online', 'Sub-folders keep their structure', 'Syncs when Echo opens and every hour, or with Sync now']],
+  ['⌨️ Type to jump (like File Explorer)', ['On any list, press a letter to jump to the first song, folder or video starting with it; press it again for the next one',
+    'Type a few letters quickly to match more of the name; Enter opens or plays it',
+    'Shuffle is now Ctrl+S and repeat is Ctrl+R (so every letter can be used for jumping)']],
   ['🗂️ Tabs (like File Explorer)', ['Every tab is its own Echo window: whatever you open in it (Home, a folder, Videos, a player, YouTube) shows there with its name',
     '+ or Ctrl+T: new tab · right-click a tab: Duplicate, Close, Close other tabs · Ctrl+W or middle-click: close · Ctrl+Tab: next tab',
     'The ← at the left of the tabs goes back to the previous page (Alt+← and the mouse\'s back button too); closing a video returns to the same place in the list',
@@ -124,7 +127,8 @@ document.addEventListener('keydown', (e) => {
     if (e.key === ']') { endHere(); return; }
     if (e.key === 's' || e.key === 'S') { splitHere(); return; }
   }
-  if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  if (e.key === ' ' && TJ.text && Date.now() - TJ.at < 900) { e.preventDefault(); typeJump(' '); } // a space inside a name you're typing
+  else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
   else if (e.key === 'Escape') { if ($('#nowplaying')) $('#nowplaying').remove(); else clearSelection(); }
   else if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A') && SEL.list.length) { e.preventDefault(); SEL.list.forEach((s) => SEL.ids.add(s.id)); selectionChanged(); }
   else if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); go('search'); }
@@ -132,8 +136,10 @@ document.addEventListener('keydown', (e) => {
   else if (e.ctrlKey && e.key === 'ArrowLeft') prev();
   else if (e.key === 'ArrowRight' && P.song) audio.currentTime += 5;
   else if (e.key === 'ArrowLeft' && P.song) audio.currentTime -= 5;
-  else if ((e.key === 's' || e.key === 'S') && !e.ctrlKey) toggleShuffle();
-  else if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey) cycleRepeat();
+  else if ((e.key === 's' || e.key === 'S') && e.ctrlKey) { e.preventDefault(); toggleShuffle(); }
+  else if ((e.key === 'r' || e.key === 'R') && e.ctrlKey) { e.preventDefault(); cycleRepeat(); }
+  else if (e.key === 'Enter' && typeJumpOpen()) e.preventDefault();
+  else if (e.key.length === 1 && /[\p{L}\p{N}]/u.test(e.key) && !e.ctrlKey && !e.altKey && !e.metaKey) typeJump(e.key); // like File Explorer
 });
 
 // ---------- drag files onto Echo ----------

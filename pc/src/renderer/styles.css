@@ -303,3 +303,6 @@ body.fullscreen #vplayer { position: fixed; }
 .vfilter .label { margin: 16px 0 8px; }
 .vfilter .label:first-child { margin-top: 0; }
 .vfilter input[type=date], .vfilter input[type=number] { color-scheme: dark; }
+
+/* type to jump: the item you jumped to */
+.item.tjfocus, .card.tjfocus { outline: 2px solid var(--glow); outline-offset: 2px; border-radius: 10px; background: rgba(0, 220, 255, .08); }

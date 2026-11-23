@@ -579,3 +579,50 @@ function renderSideFolders() {
     box.appendChild(n);
   }
 }
+
+// ---------- type to jump (like File Explorer) ----------
+// Press a letter: jumps to the first song, folder or video whose name starts with it; the same letter again goes
+// to the next one. Type a few letters quickly to match more of the name. Enter opens or plays it.
+const TJ = { text: '', at: 0, el: null };
+function typeJumpItems() {
+  return $$('#main .item, #main .card').filter((n) => n.offsetParent && !n.classList.contains('add') && typeJumpName(n));
+}
+function typeJumpName(n) {
+  const t = n.querySelector('.title, .name');
+  return t ? t.textContent.trim() : '';
+}
+function typeJump(ch) {
+  const items = typeJumpItems();
+  if (!items.length) return;
+  const now = Date.now();
+  const c = ch.toLocaleLowerCase();
+  const fresh = now - TJ.at > 900;
+  TJ.at = now;
+  const norm = (s) => s.toLocaleLowerCase().replace(/^[^\p{L}\p{N}]+/u, ''); // ignore leading "01 - ", quotes…
+  let start = TJ.el && document.body.contains(TJ.el) ? items.indexOf(TJ.el) : -1;
+  let match;
+  if (fresh || TJ.text === c.repeat(TJ.text.length)) {
+    // a new letter, or the same letter again: the next item starting with it (wraps around)
+    TJ.text = fresh || TJ.text[0] !== c ? c : TJ.text + c;
+    for (let k = 1; k <= items.length; k++) {
+      const n = items[(start + k + items.length) % items.length];
+      if (norm(typeJumpName(n)).startsWith(c)) { match = n; break; }
+    }
+  } else {
+    // a few letters typed quickly: the first item starting with all of them
+    TJ.text += c;
+    match = items.find((n) => norm(typeJumpName(n)).startsWith(TJ.text));
+  }
+  if (!match) return;
+  if (TJ.el) TJ.el.classList.remove('tjfocus');
+  TJ.el = match;
+  match.classList.add('tjfocus');
+  match.scrollIntoView({ block: 'center' });
+}
+/** Enter: open or play the item you jumped to. */
+function typeJumpOpen() {
+  if (!TJ.el || !document.body.contains(TJ.el) || !TJ.el.classList.contains('tjfocus')) return false;
+  TJ.el.click();
+  return true;
+}
+document.addEventListener('mousedown', () => { if (TJ.el) TJ.el.classList.remove('tjfocus'); });
