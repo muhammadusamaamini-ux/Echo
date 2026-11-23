@@ -178,7 +178,7 @@ public class CollageActivity extends Activity {
         return out;
     }
 
-    private void draw(Canvas c, float W, float H, boolean forSave) {
+    private void drawCollage(Canvas c, float W, float H, boolean forSave) {
         c.drawColor(bg);
         float rad = radius / 1000f * Math.min(W, H);
         List<RectF> bx = boxes(W, H);
@@ -247,7 +247,7 @@ public class CollageActivity extends Activity {
             area.set((getWidth() - W) / 2, (getHeight() - H) / 2, (getWidth() + W) / 2, (getHeight() + H) / 2);
             c.save();
             c.translate(area.left, area.top);
-            draw(c, W, H, false);
+            drawCollage(c, W, H, false);
             c.restore();
         }
 
@@ -450,7 +450,7 @@ public class CollageActivity extends Activity {
                 try {
                     int[] s = size(px[which]);
                     Bitmap out = Bitmap.createBitmap(s[0], s[1], Bitmap.Config.ARGB_8888);
-                    draw(new Canvas(out), s[0], s[1], true);
+                    drawCollage(new Canvas(out), s[0], s[1], true);
                     File tmp = new File(getCacheDir(), "collage.jpg");
                     try (FileOutputStream fo = new FileOutputStream(tmp)) { out.compress(Bitmap.CompressFormat.JPEG, 93, fo); }
                     String name = "Collage " + new SimpleDateFormat("yyyy-MM-dd HH.mm.ss", Locale.ROOT).format(new Date()) + ".jpg";
