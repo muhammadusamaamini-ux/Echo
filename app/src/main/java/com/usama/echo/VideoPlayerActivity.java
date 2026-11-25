@@ -303,6 +303,7 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
         int i = player.getCurrentMediaItemIndex();
         String u = i >= 0 && i < uris.size() ? uris.get(i) : null;
         if (u != null && (u.startsWith("content:") || u.startsWith("file:")) && !isFinishing()) {
+            player.stop();
             // a file on the phone: offer a phone-friendly copy (too big, e.g. 4K, or a format this phone can't play)
             PhoneReady.offerAfterError(this, Uri.parse(u), titles.get(i));
         } else {
@@ -350,7 +351,8 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
                 case 4: edit(); break;
                 case 8: {
                     int i = player.getCurrentMediaItemIndex();
-                    player.pause();
+                    // let go of the video chip so the converter can use it (a phone often has only one 4K decoder)
+                    player.stop();
                     PhoneReady.offer(this, Uri.parse(uris.get(i)), titles.get(i));
                     break;
                 }

@@ -24,6 +24,7 @@ import androidx.media3.effect.Presentation;
 import androidx.media3.transformer.Composition;
 import androidx.media3.transformer.DefaultEncoderFactory;
 import androidx.media3.transformer.EditedMediaItem;
+import androidx.media3.transformer.EditedMediaItemSequence;
 import androidx.media3.transformer.Effects;
 import androidx.media3.transformer.ExportException;
 import androidx.media3.transformer.ExportResult;
@@ -163,6 +164,7 @@ final class PhoneReady {
         ProgressBar bar;
         boolean cancelled;
         int index;
+        int tries; // decoder retries for the current part
 
         Job(Activity a, Uri uri, String title, Info info, boolean forStatus, int partSec) {
             this.a = a;
@@ -244,6 +246,14 @@ final class PhoneReady {
             DefaultEncoderFactory enc = new DefaultEncoderFactory.Builder(a)
                     .setRequestedVideoEncoderSettings(new VideoEncoderSettings.Builder().setBitrate(bitrate).build())
                     .build();
+            // iPhone and many new phones record HDR: turn it into normal colours (needed for H.264 and WhatsApp)
+            Composition.Builder compB = new Composition.Builder(
+                    com.google.common.collect.ImmutableList.of(new EditedMediaItemSequence(
+                            com.google.common.collect.ImmutableList.of(item))));
+            if (Build.VERSION.SDK_INT >= 29) {
+                compB.setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL);
+            }
+            final Composition comp = compB.build();
             final File out = temp();
             if (out.exists()) out.delete();
             transformer = new Transformer.Builder(a)
@@ -254,6 +264,7 @@ final class PhoneReady {
                         @Override
                         public void onCompleted(Composition composition, ExportResult result) {
                             transformer = null;
+                            tries = 0;
                             save(out);
                         }
 
@@ -265,7 +276,7 @@ final class PhoneReady {
                     })
                     .build();
             try {
-                transformer.start(item, out.getAbsolutePath());
+                transformer.start(comp, out.getAbsolutePath());
             } catch (Exception e) {
                 transformer = null;
                 dlg.dismiss();
@@ -320,15 +331,23 @@ final class PhoneReady {
 
         void fail(ExportException e) {
             main.removeCallbacksAndMessages(null);
-            dlg.dismiss();
             temp().delete();
-            String code = e.getErrorCodeName();
             boolean decode = e.errorCode == ExportException.ERROR_CODE_DECODER_INIT_FAILED
                     || e.errorCode == ExportException.ERROR_CODE_DECODING_FAILED
                     || e.errorCode == ExportException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED;
+            if (decode && tries < 2 && !cancelled) {
+                // the video decoder is often still busy for a moment (a player just let go of it): wait and try again
+                tries++;
+                msg.setText("Waiting for the video chip…");
+                main.postDelayed(this::next, 2000L * tries);
+                return;
+            }
+            dlg.dismiss();
+            String code = e.getErrorCodeName();
             String m = decode
-                    ? "This phone's video chip can't open this file at all (" + code + "), so it can't convert it "
-                    + "either.\n\nOpen the video in Echo on your PC: it plays every format and can make a normal MP4 copy."
+                    ? "The phone's video chip wouldn't start the conversion (" + code + ").\n\n"
+                    + "Close other video apps (and any video playing in Echo), then try again from Videos › ⋮ on the video. "
+                    + "If it still fails, open it in Echo on your PC: it plays every format and can make a normal MP4 copy."
                     : "The conversion didn't work on this phone (" + code + ").";
             if (!saved.isEmpty()) m += "\n\n" + saved.size() + " part(s) were already saved to Movies › Echo.";
             error(a, m);
