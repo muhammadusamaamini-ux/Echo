@@ -75,6 +75,8 @@ final class About {
                     "Play as audio: keeps a video's sound playing with the screen off",
                     "⋮ → Keep playing when I leave: the sound carries on when you leave the app or lock the phone",
                     "Opens any video or audio file from other apps (Open with → Echo), or a network stream link",
+                    "Phone-friendly copy: turns a 4K / 2160×3840 or HEVC video into a normal 1080p MP4 that plays on any phone (⋮ on a video, or ⋮ in the player; offered by itself if a video won't play)",
+                    "For WhatsApp Status: makes a small 720p MP4 and cuts long videos into 30, 60 or 90-second parts, then sends them straight to WhatsApp",
                     "Audio files opened from your phone play in Echo's music player and keep playing in the background"},
             {"✂️  Video editor (CapCut / YouCut style)",
                     "Videos chip → Edit a video, or ⋮ → Edit in the player",

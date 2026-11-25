@@ -140,7 +140,10 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
                 top.setVisibility(locked || inPip ? View.GONE : visibility));
         setupGestures();
 
-        player = new ExoPlayer.Builder(this)
+        // if the phone's main video decoder refuses a file (e.g. 4K), try its other decoders before giving up
+        androidx.media3.exoplayer.DefaultRenderersFactory renderers =
+                new androidx.media3.exoplayer.DefaultRenderersFactory(this).setEnableDecoderFallback(true);
+        player = new ExoPlayer.Builder(this, renderers)
                 .setAudioAttributes(new androidx.media3.common.AudioAttributes.Builder()
                         .setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
                 .setHandleAudioBecomingNoisy(true)
@@ -297,7 +300,14 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
 
     @Override
     public void onPlayerError(androidx.media3.common.PlaybackException error) {
-        Toast.makeText(this, "Can't play this file (" + error.getErrorCodeName() + ")", Toast.LENGTH_LONG).show();
+        int i = player.getCurrentMediaItemIndex();
+        String u = i >= 0 && i < uris.size() ? uris.get(i) : null;
+        if (u != null && (u.startsWith("content:") || u.startsWith("file:")) && !isFinishing()) {
+            // a file on the phone: offer a phone-friendly copy (too big, e.g. 4K, or a format this phone can't play)
+            PhoneReady.offerAfterError(this, Uri.parse(u), titles.get(i));
+        } else {
+            Toast.makeText(this, "Can't play this file (" + error.getErrorCodeName() + ")", Toast.LENGTH_LONG).show();
+        }
     }
 
     // ---------- buttons ----------
@@ -327,6 +337,7 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
         m.getMenu().add(0, 2, 1, "Playback speed");
         m.getMenu().add(0, 3, 2, "Play as audio (keeps playing with screen off)");
         m.getMenu().add(0, 4, 3, "Edit this video");
+        m.getMenu().add(0, 8, 3, "Phone-friendly copy / WhatsApp Status");
         m.getMenu().add(0, 5, 4, "Sleep timer");
         m.getMenu().add(0, 7, 6, "Keep playing when I leave: " + (backgroundPlay() ? "ON" : "off"));
         m.getMenu().add(0, 6, 5, "Repeat: " + (player.getRepeatMode() == Player.REPEAT_MODE_ONE ? "this video"
@@ -337,6 +348,12 @@ public class VideoPlayerActivity extends Activity implements Player.Listener {
                 case 2: chooseSpeed(); break;
                 case 3: playAsAudio(); break;
                 case 4: edit(); break;
+                case 8: {
+                    int i = player.getCurrentMediaItemIndex();
+                    player.pause();
+                    PhoneReady.offer(this, Uri.parse(uris.get(i)), titles.get(i));
+                    break;
+                }
                 case 5: sleepTimer(); break;
                 case 7:
                     boolean on = !backgroundPlay();

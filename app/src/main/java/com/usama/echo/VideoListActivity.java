@@ -171,6 +171,8 @@ public class VideoListActivity extends Activity {
         PopupMenu m = new PopupMenu(this, anchor);
         m.getMenu().add(0, 1, 0, "Play");
         m.getMenu().add(0, 2, 1, "Edit video");
+        m.getMenu().add(0, 5, 2, "Phone-friendly copy (1080p)");
+        m.getMenu().add(0, 6, 2, "For WhatsApp Status");
         m.getMenu().add(0, 3, 2, "Share");
         m.getMenu().add(0, 4, 3, "Details");
         m.setOnMenuItemClickListener(it -> {
@@ -178,6 +180,8 @@ public class VideoListActivity extends Activity {
                 case 1: VideoPlayerActivity.play(this, videos, i); break;
                 case 2: startActivity(new Intent(this, EditorActivity.class).setData(Uri.parse(v.uri))
                         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)); break;
+                case 5: PhoneReady.phoneCopy(this, Uri.parse(v.uri), v.title); break;
+                case 6: PhoneReady.status(this, Uri.parse(v.uri), v.title); break;
                 case 3:
                     Intent s = new Intent(Intent.ACTION_SEND).setType("video/*")
                             .putExtra(Intent.EXTRA_STREAM, Uri.parse(v.uri))
